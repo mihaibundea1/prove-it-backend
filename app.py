@@ -1,0 +1,53 @@
+# app.py
+from flask import Flask
+from routes.posts import posts_bp
+from routes.users import users_bp
+from Database.mongo_manager import MongoDBManager
+from AmazonS3.s3Manager import S3Manager
+
+def create_app():
+    app = Flask(__name__)
+
+    @app.route('/', methods=['GET'])
+    def get_questions():
+        return "Successfully connected"
+    
+    create_route_blueprints(app)
+    create_databases(app)
+
+    s3_manager = S3Manager()  # Asigură-te că ai definit corect s3Manager
+
+    return app
+
+def create_route_blueprints(app):
+    app.register_blueprint(posts_bp, url_prefix='/posts')
+    app.register_blueprint(users_bp, url_prefix='/users')
+
+def create_databases(app):
+    mongodb_username = 'mihaibundea'
+    mongodb_password = 'Cluster-test'
+    mongodb_cluster_url = 'cluster-develop.w8apsjm.mongodb.net'
+
+    # Crearea instanței MongoDBManager
+    mongo_users = MongoDBManager(
+        username=mongodb_username,
+        password=mongodb_password,
+        cluster_url=mongodb_cluster_url,
+        database_name='user_data'  # Asigură-te că numele bazei de date este corect
+    )
+    mongo_users.test_connection()
+
+    mongo_posts = MongoDBManager(
+        username=mongodb_username,
+        password=mongodb_password,
+        cluster_url=mongodb_cluster_url,
+        database_name='content'
+    )
+    mongo_posts.test_connection()
+    
+    app.db_users = mongo_users.get_database()
+    app.db_posts = mongo_posts.get_database()
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(debug=True)
