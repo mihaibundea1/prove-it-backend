@@ -15,7 +15,7 @@ def create_app():
     create_route_blueprints(app)
     create_databases(app)
 
-    s3_manager = S3Manager()  # Asigură-te că ai definit corect s3Manager
+    app.s3_manager = S3Manager()  # Asigură-te că ai definit corect s3Manager
 
     return app
 

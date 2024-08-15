@@ -2,7 +2,7 @@ import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 
 class S3Manager:
-    def __init__(self, region_name='us-east-1'):
+    def __init__(self, region_name='eu-north-1'):
         """
         Initializează un client S3.
         
@@ -18,7 +18,7 @@ class S3Manager:
         :return: Clientul S3 sau None în caz de eroare.
         """
         try:
-            s3_client = boto3.client('s3', region_name=self.region_name)
+            s3_client = boto3.client('s3', region_name=self.region_name, config=boto3.session.Config(signature_version='s3v4'))
             print("Client S3 creat cu succes.")
             return s3_client
         except (NoCredentialsError, PartialCredentialsError):
