@@ -12,7 +12,9 @@ def get_posts():
 
     for post in posts:
         if 'image_url' in post:
-            presigned_url = s3_helpers.generate_presigned_url('proveit-posts-images', post['image_url'])            
+
+            print(f"post['image_url'] = { post['image_url']}")
+            presigned_url = s3_helpers.generate_presigned_url(post['image_url'])            
             print(f"a ajuns aici {presigned_url}")
             if presigned_url:
                 post['image_url'] = presigned_url
