@@ -15,7 +15,7 @@ def create_app():
     create_route_blueprints(app)
     create_databases(app)
 
-    app.s3_manager = S3Manager()  # Asigură-te că ai definit corect s3Manager
+    app.s3_manager = S3Manager()  # Ensure you have defined S3Manager correctly
 
     return app
 
@@ -28,12 +28,12 @@ def create_databases(app):
     mongodb_password = 'Cluster-test'
     mongodb_cluster_url = 'cluster-develop.w8apsjm.mongodb.net'
 
-    # Crearea instanței MongoDBManager
+    # Create instances of MongoDBManager
     mongo_users = MongoDBManager(
         username=mongodb_username,
         password=mongodb_password,
         cluster_url=mongodb_cluster_url,
-        database_name='user_data'  # Asigură-te că numele bazei de date este corect
+        database_name='user_data'  # Ensure this is correct
     )
     mongo_users.test_connection()
 
