@@ -1,7 +1,7 @@
 # app.py
 from flask import Flask
 from routes.posts import posts_bp
-from routes.users import users_bp
+from routes.user_information import user_information_bp
 from routes.credentials import credentials_bp
 from Database.mongo_manager import MongoDBManager
 from AmazonS3.s3Manager import S3Manager
@@ -22,7 +22,7 @@ def create_app():
 
 def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')
-    app.register_blueprint(users_bp, url_prefix='/users')
+    app.register_blueprint(user_information_bp, url_prefix='/user_information')
     app.register_blueprint(credentials_bp, url_prefix='/credentials')
 
 def create_databases(app):
@@ -31,34 +31,25 @@ def create_databases(app):
     mongodb_cluster_url = 'cluster-develop.w8apsjm.mongodb.net'
 
     # Create instances of MongoDBManager
-    mongo_users = MongoDBManager(
+    mongo_user_data = MongoDBManager(
         username=mongodb_username,
         password=mongodb_password,
         cluster_url=mongodb_cluster_url,
         database_name='user_data'  # Ensure this is correct
     )
-    mongo_users.test_connection()
 
-    mongo_posts = MongoDBManager(
+    mongo_content = MongoDBManager(
         username=mongodb_username,
         password=mongodb_password,
         cluster_url=mongodb_cluster_url,
         database_name='content'
     )
 
-    mongo_credentials = MongoDBManager(
-        username=mongodb_username,
-        password=mongodb_password,
-        cluster_url=mongodb_cluster_url,
-        database_name='user_data'
-    )
-    mongo_posts.test_connection()
+    mongo_user_data.test_connection()
+    mongo_content.test_connection()
     
-    app.db_users = mongo_users.get_database()
-    app.db_posts = mongo_posts.get_database()
-    app.db_credentials = mongo_credentials.get_database()
-
-    
+    app.user_data = mongo_user_data.get_database()
+    app.db_content = mongo_content.get_database()
 
 if __name__ == '__main__':
     app = create_app()

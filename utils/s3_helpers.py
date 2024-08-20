@@ -1,5 +1,7 @@
 from flask import current_app
 from urllib.parse import urlparse, parse_qs
+import bcrypt
+
 
 def extract_bucket_and_key(url):
     # Descompunem URL-ul folosind urlparse
@@ -36,3 +38,6 @@ def generate_presigned_url(url):
     except Exception as e:
         print(f"Error generating presigned URL: {e}")
         return None
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
