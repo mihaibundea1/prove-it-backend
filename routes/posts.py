@@ -12,7 +12,8 @@ posts_bp = Blueprint('posts', __name__)
 @posts_bp.route('/', methods=['GET'])
 def get_posts():
     db_posts = current_app.db_posts
-    posts = list(db_posts.posts.find({}))
+    posts = list(db_posts.posts.find({}).sort('post_date', -1))
+
 
     for post in posts:
         if 'image_url' in post:
