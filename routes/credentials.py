@@ -46,11 +46,11 @@ def register_user():
     }
     try:
         credential_result = db_user_data.credentials.insert_one(credential_data)
-        user_id = credential_result.inserted_id
+        credentials_id = credential_result.inserted_id
 
         # Process and insert user information data
         user_info_data = {
-            'user_id': user_id,
+            'credentials_id': credentials_id,
             'first_name': data.get('first_name', ''),
             'last_name': data.get('last_name', ''),
             'date_of_birth': data.get('date_of_birth', ''),
@@ -62,7 +62,7 @@ def register_user():
         db_user_data.user_information.insert_one(user_info_data)
 
         # Fetch the newly created credentials without the hashed password
-        new_credentials = db_user_data.credentials.find_one({'_id': user_id}, {'hashed_password': 0})
+        new_credentials = db_user_data.credentials.find_one({'_id': credentials_id}, {'hashed_password': 0})
 
         return json.loads(json_util.dumps(new_credentials)), 201
 

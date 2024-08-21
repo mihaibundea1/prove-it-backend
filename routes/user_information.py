@@ -12,16 +12,16 @@ def get_user_information():
     print(user_info)
     return json.loads(json_util.dumps(user_info))
 
-@user_information_bp.route('/<user_id>', methods=['GET'])
-def get_user_info(user_id):
+@user_information_bp.route('/<credentials_id>', methods=['GET'])
+def get_user_info(credentials_id):
     db_user_data = current_app.user_data
-    user_info = db_user_data.user_information.find_one({'user_id': ObjectId(user_id)})
+    user_info = db_user_data.user_information.find_one({'credentials_id': ObjectId(credentials_id)})
     
     if not user_info:
         return jsonify({'error': 'User information not found'}), 404
     
     user_info['_id'] = str(user_info['_id'])
-    user_info['user_id'] = str(user_info['user_id'])
+    user_info['credentials_id'] = str(user_info['credentials_id'])
     return jsonify(user_info), 200
 
 @user_information_bp.route('/update', methods=['POST'])
@@ -29,10 +29,10 @@ def update_user_information():
     db_user_data = current_app.user_data
     data = request.get_json()
 
-    if 'user_id' not in data:
-        return jsonify({'error': 'Missing user_id'}), 400
+    if 'credentials_id' not in data:
+        return jsonify({'error': 'Missing credentials_id'}), 400
 
-    user_id = data['user_id']
+    credentials_id = data['credentials_id']
     update_data = {
         "first_name": data.get('first_name'),
         "last_name": data.get('last_name'),
@@ -46,12 +46,12 @@ def update_user_information():
     update_data = {k: v for k, v in update_data.items() if v is not None}
 
     result = db_user_data.user_information.update_one(
-        {'user_id': ObjectId(user_id)},
+        {'credentials_id': ObjectId(credentials_id)},
         {'$set': update_data}
     )
 
     if result.matched_count == 0:
-        return jsonify({'error': 'User information not found for this user_id'}), 404
+        return jsonify({'error': 'User information not found for this credentials_id'}), 404
 
     return jsonify({'message': 'User information updated successfully'}), 200
 
@@ -61,21 +61,21 @@ def save_user_information():
     data = request.get_json()
 
     # Validate required fields
-    required_fields = ['user_id', 'first_name', 'last_name', 'date_of_birth']
+    required_fields = ['credentials_id', 'first_name', 'last_name', 'date_of_birth']
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
 
-    user_id = ObjectId(data['user_id'])
+    credentials_id = ObjectId(data['credentials_id'])
 
     # Check if the user already has information saved
-    existing_info = db_user_data.user_information.find_one({'user_id': user_id})
+    existing_info = db_user_data.user_information.find_one({'credentials_id': credentials_id})
 
     if existing_info:
         
         # Update existing information
         db_user_data.user_information.update_one(
-            {'user_id': user_id},
+            {'credentials_id': credentials_id},
             {'$set': {
                 'first_name': data['first_name'],
                 'last_name': data['last_name'],
@@ -89,7 +89,7 @@ def save_user_information():
     else:
         # Insert new information
         db_user_data.user_information.insert_one({
-            'user_id': user_id,
+            'credentials_id': credentials_id,
             'first_name': data['first_name'],
             'last_name': data['last_name'],
             'date_of_birth': data['date_of_birth'],
@@ -103,7 +103,7 @@ def save_user_information():
         
         # Update the user's profile_completed status to True in credentials
         response = db_user_data.credentials.update_one(
-            {'_id': user_id},
+            {'_id': credentials_id},
             {'$set': {'profile_completed': True}}
         )
 
