@@ -72,6 +72,7 @@ def save_user_information():
     existing_info = db_user_data.user_information.find_one({'user_id': user_id})
 
     if existing_info:
+        
         # Update existing information
         db_user_data.user_information.update_one(
             {'user_id': user_id},
@@ -97,13 +98,16 @@ def save_user_information():
             'weight': data.get('weight', None),
             'created_at': datetime.utcnow().isoformat() + 'Z'
         })
-
+    
     try:
+        
         # Update the user's profile_completed status to True in credentials
-        db_user_data.credentials.update_one(
-            {'user_id': user_id},
+        response = db_user_data.credentials.update_one(
+            {'_id': user_id},
             {'$set': {'profile_completed': True}}
         )
+
+        print(response)
 
         return jsonify({'message': 'Profile completed successfully'}), 201
     except Exception as e:
