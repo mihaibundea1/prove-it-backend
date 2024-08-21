@@ -7,14 +7,15 @@ user_information_bp = Blueprint('user_information', __name__)
 
 @user_information_bp.route('/', methods=['GET'])
 def get_user_information():
-    db_user_information = current_app.db_user_information
-    user_info = list(db_user_information.user_information.find({}))
+    db_user_data = current_app.user_data
+    user_info = list(db_user_data.user_information.find({}))
+    print(user_info)
     return json.loads(json_util.dumps(user_info))
 
 @user_information_bp.route('/<user_id>', methods=['GET'])
 def get_user_info(user_id):
-    db_user_information = current_app.db_user_information
-    user_info = db_user_information.user_information.find_one({'user_id': ObjectId(user_id)})
+    db_user_data = current_app.user_data
+    user_info = db_user_data.user_information.find_one({'user_id': ObjectId(user_id)})
     
     if not user_info:
         return jsonify({'error': 'User information not found'}), 404
@@ -25,7 +26,7 @@ def get_user_info(user_id):
 
 @user_information_bp.route('/update', methods=['POST'])
 def update_user_information():
-    db_user_information = current_app.db_user_information
+    db_user_data = current_app.user_data
     data = request.get_json()
 
     if 'user_id' not in data:
@@ -44,7 +45,7 @@ def update_user_information():
     # Remove any None values
     update_data = {k: v for k, v in update_data.items() if v is not None}
 
-    result = db_user_information.user_information.update_one(
+    result = db_user_data.user_information.update_one(
         {'user_id': ObjectId(user_id)},
         {'$set': update_data}
     )
@@ -56,8 +57,7 @@ def update_user_information():
 
 @user_information_bp.route('/', methods=['POST'])
 def save_user_information():
-    db_user_information = current_app.db_user_information
-    db_credentials = current_app.db_credentials
+    db_user_data = current_app.user_data
     data = request.get_json()
 
     # Validate required fields
@@ -69,11 +69,11 @@ def save_user_information():
     user_id = ObjectId(data['user_id'])
 
     # Check if the user already has information saved
-    existing_info = db_user_information.user_information.find_one({'user_id': user_id})
+    existing_info = db_user_data.user_information.find_one({'user_id': user_id})
 
     if existing_info:
         # Update existing information
-        db_user_information.user_information.update_one(
+        db_user_data.user_information.update_one(
             {'user_id': user_id},
             {'$set': {
                 'first_name': data['first_name'],
@@ -87,7 +87,7 @@ def save_user_information():
         )
     else:
         # Insert new information
-        db_user_information.user_information.insert_one({
+        db_user_data.user_information.insert_one({
             'user_id': user_id,
             'first_name': data['first_name'],
             'last_name': data['last_name'],
@@ -100,7 +100,7 @@ def save_user_information():
 
     try:
         # Update the user's profile_completed status to True in credentials
-        db_credentials.credentials.update_one(
+        db_user_data.credentials.update_one(
             {'user_id': user_id},
             {'$set': {'profile_completed': True}}
         )
