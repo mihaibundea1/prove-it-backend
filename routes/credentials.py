@@ -102,13 +102,23 @@ def login_user():
     # Convert ObjectId to string for the response
     credentials['_id'] = str(credentials['_id'])
 
+    # Fetch user information based on credentials ID
+    user_info = db_user_data.user_information.find_one({'credentials_id': ObjectId(credentials['_id'])})
+
+    if user_info:
+        # Convert ObjectId fields to strings
+        user_info['_id'] = str(user_info['_id'])
+        user_info['credentials_id'] = str(user_info['credentials_id'])
+
     # Check if the profile is completed
     if not credentials.get('profile_completed', False):
         return jsonify({
             'message': 'Profile incomplete, redirect to completion page',
-            'credentials': credentials
+            'credentials': credentials,
+            'userInfo': user_info
         }), 200  # Use 200 OK status code for successful request
-    return jsonify({'message': 'Login successful', 'credentials': credentials}), 200
+    
+    return jsonify({'message': 'Login successful', 'credentials': credentials, 'userInfo': user_info}), 200
 
 # Helper functions for password hashing and verification
 def hash_password(password: str) -> str:

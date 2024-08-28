@@ -72,7 +72,6 @@ def save_user_information():
     existing_info = db_user_data.user_information.find_one({'credentials_id': credentials_id})
 
     if existing_info:
-        
         # Update existing information
         db_user_data.user_information.update_one(
             {'credentials_id': credentials_id},
@@ -100,15 +99,25 @@ def save_user_information():
         })
     
     try:
-        
         # Update the user's profile_completed status to True in credentials
         response = db_user_data.credentials.update_one(
             {'_id': credentials_id},
             {'$set': {'profile_completed': True}}
         )
 
-        print(response)
+        # Retrieve updated credentials and user information
+        updated_credentials = db_user_data.credentials.find_one({'_id': credentials_id})
+        updated_user_info = db_user_data.user_information.find_one({'credentials_id': credentials_id})
 
-        return jsonify({'message': 'Profile completed successfully'}), 201
+        # Convert ObjectId to string for JSON serialization
+        updated_credentials['_id'] = str(updated_credentials['_id'])
+        updated_user_info['_id'] = str(updated_user_info['_id'])
+        updated_user_info['credentials_id'] = str(updated_user_info['credentials_id'])
+
+        return jsonify({
+            'message': 'Profile completed successfully',
+            'credentials': updated_credentials,
+            'userInfo': updated_user_info
+        }), 201
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
