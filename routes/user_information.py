@@ -16,13 +16,21 @@ def get_user_information():
 def get_user_info(credentials_id):
     db_user_data = current_app.user_data
     user_info = db_user_data.user_information.find_one({'credentials_id': ObjectId(credentials_id)})
-    
+
     if not user_info:
         return jsonify({'error': 'User information not found'}), 404
-    
+
     user_info['_id'] = str(user_info['_id'])
     user_info['credentials_id'] = str(user_info['credentials_id'])
+    
+    # Ensure posts and post_count fields are included
+    if 'posts' not in user_info:
+        user_info['posts'] = []
+    if 'post_count' not in user_info:
+        user_info['post_count'] = 0
+
     return jsonify(user_info), 200
+
 
 @user_information_bp.route('/update', methods=['POST'])
 def update_user_information():
@@ -86,7 +94,7 @@ def save_user_information():
             }}
         )
     else:
-        # Insert new information
+        # Insert new information with posts and post_count initialized
         db_user_data.user_information.insert_one({
             'credentials_id': credentials_id,
             'first_name': data['first_name'],
@@ -95,6 +103,8 @@ def save_user_information():
             'bio': data.get('bio', ''),
             'height': data.get('height', None),
             'weight': data.get('weight', None),
+            'posts': [],  # Initialize empty posts list
+            'post_count': 0,  # Initialize post count to 0
             'created_at': datetime.utcnow().isoformat() + 'Z'
         })
     

@@ -48,7 +48,7 @@ def register_user():
         credential_result = db_user_data.credentials.insert_one(credential_data)
         credentials_id = credential_result.inserted_id
 
-        # Process and insert user information data
+        # Process and insert user information data with posts and post_count initialized
         user_info_data = {
             'credentials_id': credentials_id,
             'first_name': data.get('first_name', ''),
@@ -57,6 +57,8 @@ def register_user():
             'height': data.get('height'),
             'weight': data.get('weight'),
             'bio': data.get('bio', ''),
+            'posts': [],  # Initialize empty posts list
+            'post_count': 0,  # Initialize post count to 0
             'created_at': datetime.utcnow().isoformat() + 'Z'
         }
         db_user_data.user_information.insert_one(user_info_data)
