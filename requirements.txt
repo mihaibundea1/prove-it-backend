@@ -1,0 +1,6 @@
+flask
+pymongo
+bcrypt
+boto3
+mysql
+mysql-connector-python
