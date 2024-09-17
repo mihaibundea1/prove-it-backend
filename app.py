@@ -3,26 +3,20 @@ from flask import Flask
 from routes.posts import posts_bp
 from routes.user_information import user_information_bp
 from routes.credentials import credentials_bp
+from routes.exercises import exercises_bp
 from Database.mongo_manager import MongoDBManager
 from AmazonS3.s3Manager import S3Manager
 from Database.local_mysql import LocalMySQL
 
-# Global flag to track initialization
-INITIALIZED = False
-
 def create_app():
-    global INITIALIZED
     app = Flask(__name__)
 
     @app.route('/', methods=['GET'])
     def get_questions():
         return "Successfully connected"
     
+    initialize_app(app)
     create_route_blueprints(app)
-    
-    if not INITIALIZED:
-        initialize_app(app)
-        INITIALIZED = True
     
     return app
 
@@ -37,6 +31,7 @@ def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')
     app.register_blueprint(user_information_bp, url_prefix='/user_information')
     app.register_blueprint(credentials_bp, url_prefix='/credentials')
+    app.register_blueprint(exercises_bp, url_prefix='/exercises')
 
 def create_databases(app):
     mongodb_username = 'mihaibundea'
@@ -64,24 +59,30 @@ def create_databases(app):
     app.user_data = mongo_user_data.get_database()
     app.db_content = mongo_content.get_database()
 
-def create_local_mysql(app):
-    app.mysql_db = LocalMySQL()
-    app.mysql_db.connect()
-    
-    if app.mysql_db.cursor:
-        tables = app.mysql_db.get_table_names()
-        if tables:
-            print(f"Connected to MySQL. Tables: {tables}")
+def testdb(app):
+    try:
+        # Access LocalMySQL instance from the app object
+        if app.mysql_db.is_connected():
+            app.mysql_db.execute_query("SELECT 1")
+            return "Connected to the local databased"
         else:
-            print("Connected to MySQL. No tables found.")
-    else:
-        print("Failed to connect to MySQL database.")
+            return 'Database not connected.'
+    except Exception as e:
+        # e holds description of the error
+        error_text = "The error:"+ str(e)
+        hed = 'Something is broken.'
+        return hed + error_text
 
-    @app.teardown_appcontext
-    def close_mysql_connection(exception=None):
-        mysql_db = getattr(app, 'mysql_db', None)
-        if mysql_db:
-            mysql_db.disconnect()
+def create_local_mysql(app):
+    # Initialize LocalMySQL with parameters
+    app.mysql_db = LocalMySQL(
+        host='localhost',
+        port=3308,
+        user='exercises',
+        password='exercises1!',
+        database='exercises'
+    )
+    print(testdb(app))
 
 if __name__ == '__main__':
     app = create_app()
