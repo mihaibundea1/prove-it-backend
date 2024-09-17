@@ -1,15 +1,14 @@
 from flask import Blueprint, jsonify
-from Database.mysql.exercises import fetch_exercises
+from Database.mysql.exercises import fetch_exercise_groups
 
 # Initialize the blueprint
 exercises_bp = Blueprint('exercises', __name__)
 
-@exercises_bp.route('/', methods=['GET'])
-def get_exercises():
-    print("aici")
+@exercises_bp.route('/groups', methods=['GET'])
+def get_exercise_groups():
     try:
-        result = fetch_exercises()
-        print(result)
-        return result
+        exercise_groups = fetch_exercise_groups()
+        return exercise_groups
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        current_app.logger.error(f"Error fetching exercise groups: {e}")
+        return jsonify({"error": "Failed to fetch exercise groups"}), 500
