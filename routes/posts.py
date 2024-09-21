@@ -12,17 +12,29 @@ posts_bp = Blueprint('posts', __name__)
 @posts_bp.route('/', methods=['GET'])
 def get_posts():
     db_content = current_app.db_content
-    posts = list(db_content.posts.find({}).sort('post_date', -1))
 
+    # Get the credentials_id from the query parameters
+    credentials_id = request.args.get('credentials_id')
+
+    # If credentials_id is provided, filter posts by this user
+    query = {}
+    if credentials_id:
+        query['credentials_id'] = credentials_id
+
+    # Fetch posts from the database based on the query
+    posts = list(db_content.posts.find(query).sort('post_date', -1))
+
+    # Generate presigned URL for the post images
     for post in posts:
         if 'image_url' in post:
             presigned_url = s3_helpers.generate_presigned_url(post['image_url'])
             if presigned_url:
                 post['image_url'] = presigned_url
             else:
-                post['image_url'] = None  # or handle this case as appropriate
+                post['image_url'] = None  # handle this case as appropriate
 
     return json.loads(json_util.dumps(posts))
+
 
 @posts_bp.route('/', methods=['POST'])
 def create_post():
