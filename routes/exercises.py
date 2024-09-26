@@ -43,6 +43,8 @@ def get_exercises_by_group(group_id):
         limit = request.args.get('limit', 10, type=int)
         offset = (page - 1) * limit
 
+        print(page, limit, offset)
+
         exercises = fetch_exercises_by_group(group_id, limit, offset)
 
         current_app.logger.debug(f"Fetched {len(exercises)} exercises for group {group_id}.")
