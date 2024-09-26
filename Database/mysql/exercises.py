@@ -48,24 +48,17 @@ def fetch_exercise_groups():
 
 def fetch_exercises_by_group(group_id, limit, offset):
     try:
-        print(1)
-
         query = """
         SELECT exercise_id, exercise_name, image_path, image
         FROM exercise_primary_muscles
         WHERE muscle_group_id = """ + str(group_id) +"""
         LIMIT """  + str(limit) + """ OFFSET  """ + str(offset) + """ """
-        print(2)
-        print(query)
 
         result = get_db().execute_query(query)
         
-        print(3)
-
         current_app.logger.debug(f"Fetched exercises for group {group_id} (limit: {limit}, offset: {offset})")
         
         if result:
-            print(result)
             serialized_result = []
             for row in result:
                 exercise_dict = {

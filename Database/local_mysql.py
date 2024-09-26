@@ -41,7 +41,6 @@ class LocalMySQL:
             return False
 
     def execute_query(self, query):
-        print(query)
         if not self.is_connected():
             print("Not connected to the database. Please call create_engine() first.")
             return
