@@ -45,3 +45,49 @@ def fetch_exercise_groups():
     except SQLAlchemyError as e:
         current_app.logger.error(f"Database error in fetch_exercise_groups: {e}")
         return []
+
+def fetch_exercises_by_group(group_id, limit, offset):
+    try:
+        print(1)
+
+        query = """
+        SELECT exercise_id, exercise_name, image_path, image
+        FROM exercise_primary_muscles
+        WHERE muscle_group_id = """ + str(group_id) +"""
+        LIMIT """  + str(limit) + """ OFFSET  """ + str(offset) + """ """
+        print(2)
+        print(query)
+
+        result = get_db().execute_query(query)
+        
+        print(3)
+
+        current_app.logger.debug(f"Fetched exercises for group {group_id} (limit: {limit}, offset: {offset})")
+        
+        if result:
+            print(result)
+            serialized_result = []
+            for row in result:
+                exercise_dict = {
+                    'exercise_id': row[0],
+                    'exercise_name': row[1],
+                    'image_path': row[2],
+                }
+                
+                if row[3]:  # row[3] is the image data
+                    image_base64 = base64.b64encode(row[3]).decode('utf-8')
+                    exercise_dict['image_data'] = f"data:image/jpeg;base64,{image_base64}"
+                else:
+                    current_app.logger.debug(f"No image found for exercise {row[0]}")
+                    exercise_dict['image_data'] = None
+                
+                serialized_result.append(exercise_dict)
+            
+            current_app.logger.debug(f"Processed {len(serialized_result)} exercises for group {group_id}.")
+            return serialized_result
+        else:
+            current_app.logger.debug(f"No exercises found for group {group_id}.")
+            return []
+    except Exception as e:
+        current_app.logger.error(f"Database error in fetch_exercises_by_group: {e}")
+        return []
