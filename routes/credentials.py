@@ -130,3 +130,22 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+@credentials_bp.route('/search', methods=['GET'])
+def search_credentials():
+    db_user_data = current_app.user_data
+    query = request.args.get('query', '').strip()
+
+    if not query:
+        return jsonify([]), 200  # Return empty list if no query
+
+    # Perform the search
+    regex = re.compile(query, re.IGNORECASE)
+    results = list(db_user_data.credentials.find({'username': regex}, {'hashed_password': 0}))  # Exclude hashed_password
+
+    # Convert ObjectId to string for the response
+    for result in results:
+        result['_id'] = str(result['_id'])
+
+    return jsonify(results), 200
+
