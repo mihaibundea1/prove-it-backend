@@ -11,7 +11,12 @@ posts_bp = Blueprint('posts', __name__)
 
 @posts_bp.route('/', methods=['GET'])
 def get_posts():
-    db_content = current_app.db_content
+    # Pagination parameters
+    page = request.args.get('page', 1, type=int)  # Get the page number, default is 1
+    limit = request.args.get('limit', 10, type=int)  # Number of posts per page, default is 10
+    offset = (page - 1) * limit  # Calculate offset for pagination
+
+    db_content = current_app.db_content  # MongoDB connection
 
     # Get the credentials_id from the query parameters
     credentials_id = request.args.get('credentials_id')
@@ -21,8 +26,13 @@ def get_posts():
     if credentials_id:
         query['credentials_id'] = credentials_id
 
-    # Fetch posts from the database based on the query
-    posts = list(db_content.posts.find(query).sort('post_date', -1))
+    # Fetch posts from the database with pagination (skip and limit)
+    posts = list(
+        db_content.posts.find(query)
+        .sort('post_date', -1)  # Sort by post date, descending
+        .skip(offset)  # Skip the number of documents based on the offset
+        .limit(limit)  # Limit the number of posts returned
+    )
 
     # Generate presigned URL for the post images
     for post in posts:
@@ -31,8 +41,9 @@ def get_posts():
             if presigned_url:
                 post['image_url'] = presigned_url
             else:
-                post['image_url'] = None  # handle this case as appropriate
+                post['image_url'] = None  # handle case where URL generation fails
 
+    # Return the paginated posts in JSON format
     return json.loads(json_util.dumps(posts))
 
 
