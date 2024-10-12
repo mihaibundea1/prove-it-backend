@@ -47,12 +47,14 @@ def register_user():
     try:
         credential_result = db_user_data.credentials.insert_one(credential_data)
         credentials_id = credential_result.inserted_id
+        image_url = f"https://proveit-profile-pictures.s3.eu-north-1.amazonaws.com/avatar.png"
 
         # Process and insert user information data with posts and post_count initialized
         user_info_data = {
             'credentials_id': credentials_id,
             'first_name': data.get('first_name', ''),
             'last_name': data.get('last_name', ''),
+            'profile_image_url': image_url,
             'date_of_birth': data.get('date_of_birth', ''),
             'height': data.get('height'),
             'weight': data.get('weight'),
