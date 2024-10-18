@@ -1,12 +1,17 @@
 import os
 from flask import Flask
+from dotenv import load_dotenv
 from routes.posts import posts_bp
 from routes.user_information import user_information_bp
 from routes.credentials import credentials_bp
 from routes.exercises import exercises_bp
+from routes.gemini import gemini_bp
 from Database.mongo_manager import MongoDBManager
 from AmazonS3.s3Manager import S3Manager
 from Database.local_mysql import LocalMySQL
+
+# Load environment variables
+load_dotenv()
 
 def create_app():
     app = Flask(__name__)
@@ -32,11 +37,12 @@ def create_route_blueprints(app):
     app.register_blueprint(user_information_bp, url_prefix='/user_information')
     app.register_blueprint(credentials_bp, url_prefix='/credentials')
     app.register_blueprint(exercises_bp, url_prefix='/exercises')
+    app.register_blueprint(gemini_bp, url_prefix='/gemini')
 
 def create_databases(app):
-    mongodb_username = 'mihaibundea'
-    mongodb_password = 'Cluster-test'
-    mongodb_cluster_url = 'cluster-develop.w8apsjm.mongodb.net'
+    mongodb_username = os.getenv('MONGODB_USERNAME')
+    mongodb_password = os.getenv('MONGODB_PASSWORD')
+    mongodb_cluster_url = os.getenv('MONGODB_CLUSTER_URL')
 
     # Create instances of MongoDBManager
     mongo_user_data = MongoDBManager(
@@ -64,14 +70,13 @@ def testdb(app):
         # Access LocalMySQL instance from the app object
         if app.mysql_db.is_connected():
             app.mysql_db.execute_query("SELECT 1")
-            return "Connected to the local databased"
+            return "Connected to the local database"
         else:
             return 'Database not connected.'
     except Exception as e:
         # e holds description of the error
-        error_text = "The error:"+ str(e)
-        hed = 'Something is broken.'
-        return hed + error_text
+        error_text = "The error:" + str(e)
+        return 'Something is broken. ' + error_text
 
 def create_local_mysql(app):
     # Initialize LocalMySQL with parameters
@@ -84,7 +89,9 @@ def create_local_mysql(app):
     )
     print(testdb(app))
 
+# Gemini API Key
+gemini_api_key = os.getenv('GEMINI_API_KEY')
+
 if __name__ == '__main__':
     app = create_app()
     app.run(host='0.0.0.0', port=5000, debug=True)
-
