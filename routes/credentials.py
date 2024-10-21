@@ -61,6 +61,10 @@ def register_user():
             'bio': data.get('bio', ''),
             'posts': [],  # Initialize empty posts list
             'post_count': 0,  # Initialize post count to 0
+            'followers': [],  # Initialize empty followers list
+            'following': [],  # Initialize empty following list
+            'followers_count': 0,  # Initialize followers count to 0
+            'following_count': 0,  # Initialize following count to 0
             'created_at': datetime.utcnow().isoformat() + 'Z'
         }
         db_user_data.user_information.insert_one(user_info_data)
@@ -92,7 +96,7 @@ def login_user():
 
     # Verify password
     if not verify_password(data['password'], credentials['hashed_password']):
-        return jsonify({'error': 'Invalid password'}), 401
+        return jsonify({'error': 'Invalid password. Please try again.'}), 401
 
     # Remove hashed_password from the credentials data
     credentials.pop('hashed_password', None)
@@ -110,9 +114,13 @@ def login_user():
     user_info = db_user_data.user_information.find_one({'credentials_id': ObjectId(credentials['_id'])})
 
     if user_info:
-        # Convert ObjectId fields to strings
+        # Convert ObjectId fields to strings for the response
         user_info['_id'] = str(user_info['_id'])
         user_info['credentials_id'] = str(user_info['credentials_id'])
+        
+        # Convert followers and following lists to strings
+        user_info['followers'] = [str(follower) for follower in user_info.get('followers', [])]
+        user_info['following'] = [str(following) for following in user_info.get('following', [])]
 
     # Check if the profile is completed
     if not credentials.get('profile_completed', False):
@@ -121,8 +129,10 @@ def login_user():
             'credentials': credentials,
             'userInfo': user_info
         }), 200  # Use 200 OK status code for successful request
-    
+
     return jsonify({'message': 'Login successful', 'credentials': credentials, 'userInfo': user_info}), 200
+
+
 
 # Helper functions for password hashing and verification
 def hash_password(password: str) -> str:
