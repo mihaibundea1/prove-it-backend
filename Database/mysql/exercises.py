@@ -135,6 +135,7 @@ def fetch_exercise_details(exercise_id):
                 exercise_dict['image2'] = None
             
             current_app.logger.debug(f"Processed details for exercise {exercise_id}")
+            
             return exercise_dict
         else:
             current_app.logger.debug(f"No details found for exercise {exercise_id}")

@@ -6,6 +6,7 @@ from routes.user_information import user_information_bp
 from routes.credentials import credentials_bp
 from routes.exercises import exercises_bp
 from routes.gemini import gemini_bp
+from routes.workouts import workouts_bp
 from Database.mongo_manager import MongoDBManager
 from AmazonS3.s3Manager import S3Manager
 from Database.local_mysql import LocalMySQL
@@ -38,6 +39,7 @@ def create_route_blueprints(app):
     app.register_blueprint(credentials_bp, url_prefix='/credentials')
     app.register_blueprint(exercises_bp, url_prefix='/exercises')
     app.register_blueprint(gemini_bp, url_prefix='/gemini')
+    app.register_blueprint(workouts_bp, url_prefix='/workouts')
 
 def create_databases(app):
     mongodb_username = os.getenv('MONGODB_USERNAME')
