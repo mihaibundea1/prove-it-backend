@@ -219,13 +219,12 @@ def unfollow_user(followee_id):
 @user_information_bp.route('/is_following/<target_user_id>', methods=['GET'])
 def is_following(target_user_id):
     db_user_data = current_app.user_data
-    data = request.get_json()
 
-    # Check if credentials_id is provided
-    if 'credentials_id' not in data:
+    # Check if credentials_id is provided in query parameters
+    if 'credentials_id' not in request.args:
         return jsonify({'error': 'User not logged in'}), 401
 
-    follower_id = ObjectId(data['credentials_id'])  # Convert to ObjectId
+    follower_id = ObjectId(request.args['credentials_id'])  # Convert to ObjectId
     target_user_id = ObjectId(target_user_id)  # Convert to ObjectId
 
     # Check if follower_id is in the following list of the logged-in user
