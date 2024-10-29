@@ -154,6 +154,17 @@ def unlike_post(post_id, like_id):
 
     return jsonify({'message': 'Post unliked successfully'}), 200
 
+@posts_bp.route('/comments/<post_id>', methods=['GET'])
+def get_comments(post_id):
+    db_content = current_app.db_content
+    post = db_content.posts.find_one({'post_id': post_id}, {'comments': 1})
+
+    if not post:
+        return jsonify({'error': 'Post not found'}), 404
+
+    return json.loads(json_util.dumps(post.get('comments', []))), 200
+
+
 
 @posts_bp.route('/comment/<post_id>', methods=['POST'])
 def comment_post(post_id):
@@ -246,3 +257,5 @@ def delete_post(object_id):
     except Exception as e:
         print(f"Error deleting post: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+    
+    
