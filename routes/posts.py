@@ -204,3 +204,45 @@ def delete_comment(post_id, comment_id):
         return jsonify({'error': 'Post not found'}), 404
 
     return jsonify({'message': 'Comment deleted successfully'}), 200
+
+@posts_bp.route('/delete_post/<object_id>', methods=['DELETE'])
+def delete_post(object_id):
+    try:
+        db_content = current_app.db_content
+        db_user_data = current_app.user_data
+        
+        # Get the post_id from query parameters
+        post_id = request.args.get('post_id')
+        
+        # Convert string ID to ObjectId
+        object_id = ObjectId(object_id)
+
+        # First, find the post using _id
+        post = db_content.posts.find_one({'_id': object_id})
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+
+        # Delete the post using _id
+        result = db_content.posts.delete_one({'_id': object_id})
+
+        if result.deleted_count > 0:
+            # Update user using credentials_id (converted to ObjectId) and the post_id
+            update_result = db_user_data.user_information.update_one(
+                {'credentials_id': ObjectId(post['credentials_id'])},  # Convert to ObjectId
+                {
+                    '$pull': {'posts': post_id},  # Use the post_id from query params
+                    '$inc': {'post_count': -1}
+                }
+            )
+
+            if update_result.modified_count > 0:
+                return jsonify({'message': 'Post deleted successfully'}), 200
+            else:
+                print(f"Warning: Post deleted but user data not updated. Post ID: {post_id}")
+                return jsonify({'message': 'Post deleted but user data may be inconsistent'}), 200
+
+        return jsonify({'error': 'Failed to delete post'}), 500
+
+    except Exception as e:
+        print(f"Error deleting post: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
