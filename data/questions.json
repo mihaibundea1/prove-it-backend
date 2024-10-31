@@ -1,0 +1,58 @@
+[
+    {
+        "id": "q1",
+        "question": "What is your primary fitness goal?",
+        "options": [
+            "Lose weight",
+            "Build muscle",
+            "Improve endurance",
+            "Increase flexibility"
+        ],
+        "answer_type": "multiple"
+    },
+    {
+        "id": "q2",
+        "question": "How many days per week do you plan to work out?",
+        "options": [],
+        "answer_type": "text"
+    },
+    {
+        "id": "q3",
+        "question": "What type of workouts do you prefer?",
+        "options": [
+            "Strength training",
+            "Cardio",
+            "Yoga",
+            "Other"
+        ],
+        "answer_type": "multiple"
+    },
+    {
+        "id": "q4",
+        "question": "What is your preferred time of day to work out?",
+        "options": [
+            "Morning",
+            "Afternoon",
+            "Evening",
+            "No preference"
+        ],
+        "answer_type": "single"
+    },
+    {
+        "id": "q5",
+        "question": "What motivates you to stay active?",
+        "options": [
+            "Health benefits",
+            "Appearance",
+            "Stress relief",
+            "Social interaction"
+        ],
+        "answer_type": "multiple"
+    },
+    {
+        "id": "q6",
+        "question": "Do you have any existing injuries or conditions we should be aware of?",
+        "options": [],
+        "answer_type": "text"
+    }
+]

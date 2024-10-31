@@ -41,6 +41,7 @@ def register_user():
         'email': data['email'],
         'hashed_password': hash_password(data['password']),
         'profile_completed': False,
+        'questions_completed': False,
         'created_at': datetime.utcnow().isoformat() + 'Z',
         'last_login': None
     }

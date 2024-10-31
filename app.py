@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from dotenv import load_dotenv
 from routes.posts import posts_bp
 from routes.user_information import user_information_bp
@@ -10,6 +10,8 @@ from routes.workouts import workouts_bp
 from Database.mongo_manager import MongoDBManager
 from AmazonS3.s3Manager import S3Manager
 from Database.local_mysql import LocalMySQL
+from scripts.question_updater import update_questions  
+from routes.questions import questions_bp 
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +23,7 @@ def create_app():
     def get_questions():
         return "Successfully connected"
     
+
     initialize_app(app)
     create_route_blueprints(app)
     
@@ -40,6 +43,7 @@ def create_route_blueprints(app):
     app.register_blueprint(exercises_bp, url_prefix='/exercises')
     app.register_blueprint(gemini_bp, url_prefix='/gemini')
     app.register_blueprint(workouts_bp, url_prefix='/workouts')
+    app.register_blueprint(questions_bp, url_prefix='/questions')
 
 def create_databases(app):
     mongodb_username = os.getenv('MONGODB_USERNAME')
