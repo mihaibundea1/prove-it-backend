@@ -13,6 +13,7 @@ from Database.local_mysql import LocalMySQL
 from scripts.question_updater import update_questions  
 from routes.questions import questions_bp 
 
+from core.redis_manager import RedisManager
 # Load environment variables
 load_dotenv()
 
@@ -22,7 +23,6 @@ def create_app():
     @app.route('/', methods=['GET'])
     def get_questions():
         return "Successfully connected"
-    
 
     initialize_app(app)
     create_route_blueprints(app)
@@ -33,8 +33,23 @@ def initialize_app(app):
     print("Starting app initialization...")
     create_databases(app)
     create_local_mysql(app)
+    create_redis_cache(app)  # Adăugăm inițializarea Redis
     app.s3_manager = S3Manager()
     print("App initialization complete.")
+
+def create_redis_cache(app):
+    """Initialize Redis cache manager"""
+    try:
+        app.redis_manager = RedisManager()
+        # Verifică conexiunea
+        if app.redis_manager.health_check():
+            print("Redis cache initialization successful")
+        else:
+            print("Warning: Redis cache health check failed")
+    except Exception as e:
+        print(f"Warning: Redis cache initialization failed: {e}")
+        # Nu oprim aplicația dacă Redis nu e disponibil
+        app.redis_manager = None
 
 def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')
