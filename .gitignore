@@ -93,3 +93,14 @@ dmypy.json
 *.swp
 *.swo
 *~
+
+# PyCharm
+
+.idea/
+.idea/*
+.idea/.gitignore
+.idea/inspectionProfiles/
+.idea/misc.xml
+.idea/modules.xml
+.idea/prove-it-backend.iml
+.idea/vcs.xml
