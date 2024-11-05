@@ -20,7 +20,9 @@ class RedisManager:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
+                    cls._instance.logger = logging.getLogger(__name__)
                     cls._instance._initialize()
+
         return cls._instance
     
     def __init__(self):
