@@ -23,6 +23,7 @@ def fetch_exercise_groups():
             
             for group in serialized_result:
                 image_url = group.get('image_url')
+                print(image_url)
                 if image_url:
                     # Extract the S3 object key from the URL
                     object_key = image_url.split(f's3://{bucket_name}/')[1]
@@ -35,6 +36,7 @@ def fetch_exercise_groups():
                     else:
                         # Handle cases where the pre-signed URL could not be generated
                         group['image_url'] = None
+                    print (group['image_url'])
             
             return serialized_result
         else:
