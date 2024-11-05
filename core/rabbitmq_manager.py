@@ -29,34 +29,30 @@ class RabbitMQManager:
         try:
             load_dotenv()
             
-            # Docker connection details
-            self.host = os.getenv('RABBITMQ_HOST', 'localhost')
-            self.port = int(os.getenv('RABBITMQ_PORT', 5672))
-            self.username = os.getenv('RABBITMQ_USER', 'guest')
-            self.password = os.getenv('RABBITMQ_PASSWORD', 'guest')
-            self.virtual_host = os.getenv('RABBITMQ_VHOST', '/')
-            
-            self.logger = logging.getLogger(__name__)
-            self._connection = None
-            self._channel = None
-            
             # Connection parameters
             self.parameters = pika.ConnectionParameters(
-                host=self.host,
-                port=self.port,
-                virtual_host=self.virtual_host,
+                host=os.getenv('RABBITMQ_HOST', 'localhost'),
+                port=int(os.getenv('RABBITMQ_PORT', 5672)),
+                virtual_host=os.getenv('RABBITMQ_VHOST', '/'),
                 credentials=pika.PlainCredentials(
-                    username=self.username,
-                    password=self.password
+                    username=os.getenv('RABBITMQ_USER', 'guest'),
+                    password=os.getenv('RABBITMQ_PASSWORD', 'guest')
                 ),
                 heartbeat=600,
                 blocked_connection_timeout=300
             )
             
+            self.logger = logging.getLogger(__name__)
+            self._connection = None
+            self._channel = None
+            
+            # Test connection on initialization
+            self._connect()
+            
         except Exception as e:
             self.logger.error(f"Failed to initialize RabbitMQ connection: {e}")
             raise
-            
+
     def ensure_connection(f):
         """Decorator to ensure connection is active"""
         @wraps(f)
