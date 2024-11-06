@@ -1,7 +1,53 @@
 from flask import Blueprint, jsonify, current_app, request
-from Database.mysql.exercises import fetch_exercise_groups, fetch_exercises_by_group, fetch_exercise_details
+from Database.mysql.exercises import fetch_all_exercises, fetch_exercise_groups, fetch_exercises_by_group, fetch_exercise_details
 
 exercises_bp = Blueprint('exercises', __name__)
+
+@exercises_bp.route('/all', methods=['GET'])
+def get_all_exercises():
+    try:
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 100, type=int)
+        
+        # Get filters from query parameters
+        filters = {}
+        if request.args.get('force'):
+            filters['force'] = request.args.get('force')
+        if request.args.get('level'):
+            filters['level'] = request.args.get('level')
+        if request.args.get('mechanic'):
+            filters['mechanic'] = request.args.get('mechanic')
+        if request.args.get('equipment'):
+            filters['equipment'] = request.args.get('equipment')
+        if request.args.get('category'):
+            filters['category'] = request.args.get('category')
+        if request.args.get('search'):
+            filters['search'] = request.args.get('search')
+        
+        # Debug print
+        print(f"Page: {page}, Limit: {limit}, Filters: {filters}")
+        
+        # Get exercises
+        exercises = fetch_all_exercises(
+            filters=filters if filters else None,
+            page=page,
+            limit=limit
+        )
+        
+        return jsonify({
+            'exercises': exercises,
+            'page': page,
+            'limit': limit,
+            'total': len(exercises)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in fetch_all_exercises: {e}")
+        return jsonify({
+            'error': 'An error occurred while fetching exercises',
+            'exercises': []
+        })
 
 @exercises_bp.route('/groups', methods=['GET'])
 def get_exercise_groups():

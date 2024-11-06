@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 from core.redis_manager import RedisManager
+from utils.image_processing import resize_and_cache_image
 import json
 
 def get_db():
@@ -8,6 +9,107 @@ def get_db():
 
 def get_redis():
     return RedisManager()
+
+def fetch_all_exercises(filters=None, page=1, limit=100):
+    try:
+        # Ensure page and limit are integers
+        page = int(page) if isinstance(page, str) else page
+        limit = int(limit) if isinstance(limit, str) else limit
+        offset = (page - 1) * limit
+        
+        redis_manager = get_redis()
+        cache_key = f"exercises:all:limit:{limit}:offset:{offset}"
+        
+        cached_exercises = redis_manager.get(cache_key)
+        if cached_exercises:
+            current_app.logger.debug(f"Retrieved exercises from cache")
+            return process_exercises_images(cached_exercises)
+            
+        query = """
+            SELECT DISTINCT
+                e.id,
+                e.name,
+                e.force,
+                e.level,
+                e.mechanic,
+                e.equipment,
+                e.category,
+                e.primary_muscles,
+                e.secondary_muscles,
+                e.instructions,
+                e.images
+            FROM exercises e
+            WHERE 1=1
+            LIMIT %s OFFSET %s
+        """
+        
+        result = get_db().execute_query(query, (limit, offset))
+        
+        if result:
+            exercises = []
+            s3_manager = current_app.s3_manager
+            bucket_name = 'proveit-exercises-directories'
+            
+            for row in result:
+                # Parse images JSON string to list
+                images = json.loads(row['images']) if row['images'] else []
+                
+                # Generate presigned URLs for all images
+                image_urls = []
+                for image_path in images:
+                    if image_path.startswith(f's3://{bucket_name}/'):
+                        object_key = image_path.split(f's3://{bucket_name}/')[1]
+                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                        if presigned_url:
+                            image_urls.append(presigned_url)
+                
+                exercise = {
+                    'id': row['id'],
+                    'title': row['name'],  # Changed from 'name' to 'title' for frontend
+                    'force': row['force'],
+                    'level': row['level'],
+                    'mechanic': row['mechanic'],
+                    'equipment': row['equipment'],
+                    'category': row['category'],
+                    'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
+                    'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
+                    'instructions': json.loads(row['instructions']) if row['instructions'] else [],
+                    'image': {  # Format expected by frontend
+                        'uri': image_urls[0] if image_urls else None
+                    }
+                }
+                exercises.append(exercise)
+                
+            redis_manager.set(cache_key, exercises, expires_in=12*3600)
+            current_app.logger.debug(f"Cached {len(exercises)} exercises")
+            
+            return exercises
+        return []
+        
+    except Exception as e:
+        current_app.logger.error(f"Database error in fetch_all_exercises: {e}")
+        return []
+
+def process_exercises_images(exercises):
+    """Process cached exercises to update image URLs"""
+    try:
+        s3_manager = current_app.s3_manager
+        bucket_name = 'proveit-exercises-directories'
+        
+        for exercise in exercises:
+            if exercise.get('images'):
+                images = json.loads(exercise['images']) if isinstance(exercise['images'], str) else exercise['images']
+                if images and len(images) > 0:
+                    image_path = images[0]
+                    if image_path.startswith(f's3://{bucket_name}/'):
+                        object_key = image_path.split(f's3://{bucket_name}/')[1]
+                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                        exercise['image'] = {'uri': presigned_url} if presigned_url else {'uri': None}
+        
+        return exercises
+    except Exception as e:
+        current_app.logger.error(f"Error processing exercise images: {e}")
+        return exercises
 
 def fetch_exercise_groups():
     try:
@@ -107,6 +209,7 @@ def fetch_exercises_by_group(group_id, limit, offset):
     except SQLAlchemyError as e:
         current_app.logger.error(f"Database error in fetch_exercises_by_group: {e}")
         return []
+        
     
 def fetch_exercise_details(exercise_id):
     redis_manager = get_redis()
