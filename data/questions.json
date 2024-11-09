@@ -54,5 +54,59 @@
         "question": "Do you have any existing injuries or conditions we should be aware of?",
         "options": [],
         "answer_type": "text"
+    },
+    {
+        "id": "q7",
+        "question": "What equipment do you have access to?",
+        "options": [
+            "Full gym",
+            "Home equipment",
+            "Resistance bands",
+            "No equipment",
+            "Outdoor facilities"
+        ],
+        "answer_type": "multiple"
+    },
+    {
+        "id": "q8",
+        "question": "How would you rate your current fitness level?",
+        "options": [
+            "Beginner",
+            "Intermediate",
+            "Advanced",
+            "Professional"
+        ],
+        "answer_type": "single"
+    },
+    {
+        "id": "q9",
+        "question": "What are your preferred workout environments?",
+        "options": [
+            "Indoor gym",
+            "Home workouts",
+            "Outdoor activities",
+            "Group classes",
+            "Personal training"
+        ],
+        "answer_type": "multiple"
+    },
+    {
+        "id": "q10",
+        "question": "What is your target weight or body composition goal? (e.g., '70kg' or 'Maintain current weight')",
+        "options": [],
+        "answer_type": "text"
+    },
+    {
+        "id": "q11",
+        "question": "Which areas would you like to focus on improving?",
+        "options": [
+            "Upper body",
+            "Lower body",
+            "Core strength",
+            "Overall conditioning",
+            "Balance and stability",
+            "Cardiovascular health"
+        ],
+        "answer_type": "multiple"
     }
 ]

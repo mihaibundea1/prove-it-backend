@@ -12,6 +12,8 @@ from AmazonS3.s3Manager import S3Manager
 from Database.local_mysql import LocalMySQL
 from scripts.question_updater import update_questions  
 from routes.questions import questions_bp 
+from core.redis_manager import RedisManager
+from core.rabbitmq_manager import RabbitMQManager
 
 # Load environment variables
 load_dotenv()
@@ -22,7 +24,29 @@ def create_app():
     @app.route('/', methods=['GET'])
     def get_questions():
         return "Successfully connected"
-    
+
+    @app.route('/test-message-brokers')
+    def test_message_brokers():
+        results = {}
+        
+        # Test Redis
+        if app.redis_manager:
+            try:
+                app.redis_manager.set('test_key', 'test_value')
+                redis_value = app.redis_manager.get('test_key')
+                results['redis'] = f"Success: {redis_value}"
+            except Exception as e:
+                results['redis'] = f"Error: {str(e)}"
+        
+        # Test RabbitMQ
+        if app.rabbitmq_manager:
+            try:
+                app.rabbitmq_manager.publish('test_queue', 'test_message')
+                results['rabbitmq'] = "Message published successfully"
+            except Exception as e:
+                results['rabbitmq'] = f"Error: {str(e)}"
+        
+        return jsonify(results)
 
     initialize_app(app)
     create_route_blueprints(app)
@@ -33,8 +57,36 @@ def initialize_app(app):
     print("Starting app initialization...")
     create_databases(app)
     create_local_mysql(app)
+    initialize_message_brokers(app)
     app.s3_manager = S3Manager()
     print("App initialization complete.")
+
+def initialize_message_brokers(app):
+    """Initialize Redis and RabbitMQ connections"""
+    # Initialize Redis
+    try:
+        app.redis_manager = RedisManager()
+        if app.redis_manager.health_check():
+            print("Redis initialization successful")
+        else:
+            print("Warning: Redis health check failed")
+    except Exception as e:
+        print(f"Warning: Redis initialization failed: {e}")
+        app.redis_manager = None
+
+    # Initialize RabbitMQ
+    try:
+        app.rabbitmq_manager = RabbitMQManager()
+        if app.rabbitmq_manager.health_check():
+            print("RabbitMQ initialization successful")
+            
+            # Optional: Setup default exchanges/queues
+            app.rabbitmq_manager.declare_queue('default_queue', durable=True)
+        else:
+            print("Warning: RabbitMQ health check failed")
+    except Exception as e:
+        print(f"Warning: RabbitMQ initialization failed: {e}")
+        app.rabbitmq_manager = None
 
 def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')
@@ -71,33 +123,45 @@ def create_databases(app):
     app.user_data = mongo_user_data.get_database()
     app.db_content = mongo_content.get_database()
 
+def create_local_mysql(app):
+    app.mysql_db = LocalMySQL(
+            host='127.0.0.1',      
+            port=3308,            
+            user='exercises',       
+            password='exercises1!',
+            database='exercises'
+        )
+    print(testdb(app))
+
 def testdb(app):
     try:
-        # Access LocalMySQL instance from the app object
         if app.mysql_db.is_connected():
             app.mysql_db.execute_query("SELECT 1")
             return "Connected to the local database"
         else:
             return 'Database not connected.'
     except Exception as e:
-        # e holds description of the error
         error_text = "The error:" + str(e)
         return 'Something is broken. ' + error_text
 
-def create_local_mysql(app):
-    # Initialize LocalMySQL with parameters
-    app.mysql_db = LocalMySQL(
-        host='localhost',
-        port=3308,
-        user='exercises',
-        password='exercises1!',
-        database='exercises'
-    )
-    print(testdb(app))
+# Cleanup function for graceful shutdown
+def cleanup_connections(app):
+    """Cleanup all connections when shutting down"""
+    if hasattr(app, 'redis_manager'):
+        try:
+            app.redis_manager.get_connection().close()
+        except:
+            pass
 
-# Gemini API Key
-gemini_api_key = os.getenv('GEMINI_API_KEY')
+    if hasattr(app, 'rabbitmq_manager'):
+        try:
+            app.rabbitmq_manager.close()
+        except:
+            pass
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    try:
+        app.run(host='0.0.0.0', port=5000, debug=True)
+    finally:
+        cleanup_connections(app)

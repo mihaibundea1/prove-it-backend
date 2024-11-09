@@ -1,8 +1,6 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 import pymysql
-from flask import jsonify
-from datetime import datetime
 
 class LocalMySQL:
     def __init__(self, host='localhost', port=3008, user='exercises', password='exercises1!', database='exercises'):
@@ -16,23 +14,52 @@ class LocalMySQL:
 
     def create_engine(self):
         try:
-            # Construct the SQLAlchemy URI
-            self.engine = create_engine(f'mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}')
+            self.engine = create_engine(
+                f'mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}',
+                pool_pre_ping=True
+            )
             print("SQLAlchemy engine created")
-            
-            # Test the connection and execute a query
-            with self.engine.connect() as connection:
-                result = connection.execute(text("SHOW TABLES"))
-                tables = result.fetchall()
-                print("Tables:", tables)
-        
         except SQLAlchemyError as e:
-            print(f"Error creating SQLAlchemy engine or executing query: {e}")
+            print(f"Error creating SQLAlchemy engine: {e}")
+            raise
+
+    def execute_query(self, query, params=None):
+        try:
+            with self.engine.connect() as connection:
+                if isinstance(query, str):
+                    query = text(query)
+                
+                if params:
+                    # Convert tuple params to dict for SQLAlchemy
+                    if isinstance(params, tuple):
+                        # Create placeholders for the parameters
+                        param_dict = {}
+                        for i, value in enumerate(params):
+                            param_dict[f'param_{i}'] = value
+                        # Replace %s with :param_0, :param_1, etc.
+                        modified_query = query.text
+                        for i in range(len(params)):
+                            modified_query = modified_query.replace('%s', f':param_{i}', 1)
+                        query = text(modified_query)
+                        result = connection.execute(query, param_dict)
+                    else:
+                        result = connection.execute(query, params)
+                else:
+                    result = connection.execute(query)
+                
+                if query.text.strip().upper().startswith('SELECT'):
+                    return [dict(row._mapping) for row in result]
+                else:
+                    connection.commit()
+                    return True
+                    
+        except SQLAlchemyError as e:
+            print(f"Error executing query: {e}")
+            raise
 
     def is_connected(self):
         try:
             if self.engine:
-                # Test the connection
                 with self.engine.connect() as connection:
                     connection.execute(text('SELECT 1'))
                 return True
@@ -40,18 +67,6 @@ class LocalMySQL:
         except SQLAlchemyError:
             return False
 
-    def execute_query(self, query):
-        if not self.is_connected():
-            print("Not connected to the database. Please call create_engine() first.")
-            return
-        try:
-            with self.engine.connect() as connection:
-                result = connection.execute(text(query))
-                return result.fetchall()
-        except SQLAlchemyError as e:
-            print(f"Error executing query: {e}")
-            return None
-
-    def serialize_result(self, result):
-        """Convert SQLAlchemy result to a JSON-serializable format."""
-        return [dict(row) for row in result]
+    def close(self):
+        if self.engine:
+            self.engine.dispose()

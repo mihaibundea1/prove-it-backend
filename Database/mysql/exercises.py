@@ -1,108 +1,287 @@
 from flask import Blueprint, jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
-import base64
-
-exercises_bp = Blueprint('exercises', __name__)
+from core.redis_manager import RedisManager
+from utils.image_processing import resize_and_cache_image
+import json
 
 def get_db():
     return current_app.mysql_db
 
-def fetch_exercise_groups():
+def get_redis():
+    return RedisManager()
+
+def fetch_all_exercises(filters=None, page=1, limit=100):
     try:
-        query = "SELECT id, name, image FROM exercise_groups"
-        result = get_db().execute_query(query)
+        # Ensure page and limit are integers
+        page = int(page) if isinstance(page, str) else page
+        limit = int(limit) if isinstance(limit, str) else limit
+        offset = (page - 1) * limit
         
-        current_app.logger.debug(f"Fetched {len(result)} exercise groups from the database.")
+        redis_manager = get_redis()
+        cache_key = f"exercises:all:limit:{limit}:offset:{offset}"
+        
+        cached_exercises = redis_manager.get(cache_key)
+        if cached_exercises:
+            current_app.logger.debug(f"Retrieved exercises from cache")
+            return process_exercises_images(cached_exercises)
+            
+        query = """
+            SELECT DISTINCT
+                e.id,
+                e.name,
+                e.force,
+                e.level,
+                e.mechanic,
+                e.equipment,
+                e.category,
+                e.primary_muscles,
+                e.secondary_muscles,
+                e.instructions,
+                e.images
+            FROM exercises e
+            WHERE 1=1
+            LIMIT %s OFFSET %s
+        """
+        
+        result = get_db().execute_query(query, (limit, offset))
         
         if result:
-            columns = ["id", "name", "image"]
-            serialized_result = []
+            exercises = []
+            s3_manager = current_app.s3_manager
+            bucket_name = 'proveit-exercises-directories'
             
             for row in result:
-                group_dict = dict(zip(columns, row))
-                                
-                # Convert BLOB to base64 encoded string
-                if group_dict['image'] is not None:
-                    image_size = len(group_dict['image'])
-                    
-                    image_base64 = base64.b64encode(group_dict['image']).decode('utf-8')
-                    group_dict['image_data'] = f"data:image/jpeg;base64,{image_base64}"
-                    
-                else:
-                    current_app.logger.debug(f"No image found for group {group_dict['id']}")
-                    group_dict['image_data'] = None
+                # Parse images JSON string to list
+                images = json.loads(row['images']) if row['images'] else []
                 
-                # Remove the original BLOB data
-                del group_dict['image']
+                # Generate presigned URLs for all images
+                image_urls = []
+                for image_path in images:
+                    if image_path.startswith(f's3://{bucket_name}/'):
+                        object_key = image_path.split(f's3://{bucket_name}/')[1]
+                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                        if presigned_url:
+                            image_urls.append(presigned_url)
                 
-                serialized_result.append(group_dict)
+                exercise = {
+                    'id': row['id'],
+                    'title': row['name'],  # Changed from 'name' to 'title' for frontend
+                    'force': row['force'],
+                    'level': row['level'],
+                    'mechanic': row['mechanic'],
+                    'equipment': row['equipment'],
+                    'category': row['category'],
+                    'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
+                    'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
+                    'instructions': json.loads(row['instructions']) if row['instructions'] else [],
+                    'image': {  # Format expected by frontend
+                        'uri': image_urls[0] if image_urls else None
+                    }
+                }
+                exercises.append(exercise)
+                
+            redis_manager.set(cache_key, exercises, expires_in=12*3600)
+            current_app.logger.debug(f"Cached {len(exercises)} exercises")
             
-            current_app.logger.debug(f"Processed {len(serialized_result)} exercise groups.")
+            return exercises
+        return []
+        
+    except Exception as e:
+        current_app.logger.error(f"Database error in fetch_all_exercises: {e}")
+        return []
+
+def process_exercises_images(exercises):
+    """Process cached exercises to update image URLs"""
+    try:
+        s3_manager = current_app.s3_manager
+        bucket_name = 'proveit-exercises-directories'
+        
+        for exercise in exercises:
+            if exercise.get('images'):
+                images = json.loads(exercise['images']) if isinstance(exercise['images'], str) else exercise['images']
+                if images and len(images) > 0:
+                    image_path = images[0]
+                    if image_path.startswith(f's3://{bucket_name}/'):
+                        object_key = image_path.split(f's3://{bucket_name}/')[1]
+                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                        exercise['image'] = {'uri': presigned_url} if presigned_url else {'uri': None}
+        
+        return exercises
+    except Exception as e:
+        current_app.logger.error(f"Error processing exercise images: {e}")
+        return exercises
+
+def fetch_exercise_groups():
+    try:
+        query = "SELECT * FROM exercise_groups"
+        result = get_db().execute_query(query)
+        
+        if result:
+            columns = ["id", "name", "image_url"]
+            serialized_result = [dict(zip(columns, row)) for row in result]
+            
+            s3_manager = current_app.s3_manager
+            bucket_name = 'proveit-exercises-directories'
+            
+            for group in serialized_result:
+                image_url = group.get('image_url')
+                print(image_url)
+                if image_url:
+                    # Extract the S3 object key from the URL
+                    object_key = image_url.split(f's3://{bucket_name}/')[1]
+                    
+                    # Generate a pre-signed URL
+                    presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                    
+                    if presigned_url:
+                        group['image_url'] = presigned_url
+                    else:
+                        # Handle cases where the pre-signed URL could not be generated
+                        group['image_url'] = None
+                    print (group['image_url'])
+            
             return serialized_result
         else:
-            current_app.logger.debug("No exercise groups found in the database.")
             return []
     except SQLAlchemyError as e:
         current_app.logger.error(f"Database error in fetch_exercise_groups: {e}")
         return []
 
 def fetch_exercises_by_group(group_id, limit, offset):
+    redis_manager = get_redis()
+    cache_key = f"exercises:group:{group_id}:limit:{limit}:offset:{offset}"
+    
     try:
+        # Încearcă să obții din cache
+        cached_exercises = redis_manager.get(cache_key)
+        if cached_exercises:
+            current_app.logger.debug(f"Retrieved exercises for group {group_id} from cache")
+            # Generează URL-uri noi pentru datele din cache
+            s3_manager = current_app.s3_manager
+            bucket_name = 'proveit-exercises-directories'
+            
+            for exercise in cached_exercises:
+                image_url = exercise.get('image_url')
+                if image_url:
+                    object_key = image_url.split(f's3://{bucket_name}/')[1]
+                    presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                    exercise['image_url'] = presigned_url if presigned_url else None
+                    
+            return cached_exercises
+            
         query = """
-        SELECT exercise_id, exercise_name, image_path, image
-        FROM exercise_primary_muscles
-        WHERE muscle_group_id = """ + str(group_id) +"""
-        LIMIT """  + str(limit) + """ OFFSET  """ + str(offset) + """
+        SELECT e.id, e.name, ep.image_path
+        FROM exercises e
+        JOIN exercise_primary_muscles ep ON e.id = ep.exercise_id
+        WHERE ep.muscle_group_id = %s
+        LIMIT %s OFFSET %s
         """
-
-        result = get_db().execute_query(query)
         
-        current_app.logger.debug(f"Fetched exercises for group {group_id} (limit: {limit}, offset: {offset})")
+        result = get_db().execute_query(query, (group_id, limit, offset))
         
         if result:
-            serialized_result = []
-            for row in result:
-                exercise_dict = {
+            serialized_result = [
+                {
                     'exercise_id': row[0],
                     'exercise_name': row[1],
-                    'image_path': row[2],
+                    'image_url': row[2]
                 }
-                
-                if row[3]:  # row[3] is the image data
-                    image_base64 = base64.b64encode(row[3]).decode('utf-8')
-                    exercise_dict['image_data'] = f"data:image/jpeg;base64,{image_base64}"
-                else:
-                    current_app.logger.debug(f"No image found for exercise {row[0]}")
-                    exercise_dict['image_data'] = None
-                
-                serialized_result.append(exercise_dict)
+                for row in result
+            ]
             
-            current_app.logger.debug(f"Processed {len(serialized_result)} exercises for group {group_id}.")
+            s3_manager = current_app.s3_manager
+            bucket_name = 'proveit-exercises-directories'
+            
+            for exercise in serialized_result:
+                image_url = exercise.get('image_url')
+                if image_url:
+                    object_key = image_url.split(f's3://{bucket_name}/')[1]
+                    presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                    exercise['image_url'] = presigned_url if presigned_url else None
+            
+            # Salvează în cache pentru 12 ore
+            redis_manager.set(cache_key, serialized_result, expires_in=12*3600)
+            current_app.logger.debug(f"Cached {len(serialized_result)} exercises for group {group_id}")
             return serialized_result
-        else:
-            current_app.logger.debug(f"No exercises found for group {group_id}.")
-            return []
-    except Exception as e:
+            
+        return []
+        
+    except SQLAlchemyError as e:
         current_app.logger.error(f"Database error in fetch_exercises_by_group: {e}")
         return []
+        
     
 def fetch_exercise_details(exercise_id):
+    redis_manager = get_redis()
+    cache_key = f"exercise:details:{exercise_id}"
+    
     try:
-        print(f"exerciseid {exercise_id}")
-        query = ("SELECT name, 'force', level, mechanic, equipment, category, "
-                "primary_muscles, secondary_muscles, instructions, "
-                "image1_path, image1, image2_path, image2 "
-                "FROM exercises "
-                "WHERE id =  \'" + exercise_id + "\' ")
+        # Încearcă să obții din cache
+        cached_exercise = redis_manager.get(cache_key)
+        if cached_exercise:
+            current_app.logger.debug(f"Retrieved exercise {exercise_id} details from cache")
+            # Generează URL-uri noi pentru imaginile din cache
+            s3_manager = current_app.s3_manager
+            bucket_name = 'proveit-exercises-directories'
+            
+            if isinstance(cached_exercise.get('images'), list):
+                updated_images = []
+                for image_url in cached_exercise['images']:
+                    if image_url:
+                        object_key = image_url.split(f's3://{bucket_name}/')[1]
+                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                        updated_images.append(presigned_url if presigned_url else None)
+                cached_exercise['images'] = updated_images
+                
+            return cached_exercise
         
-        print(query)
-
-        result = get_db().execute_query(query)
+        query = """
+        SELECT 
+            name, 
+            `force`, 
+            level, 
+            mechanic, 
+            equipment, 
+            category,
+            primary_muscles,
+            secondary_muscles,
+            instructions,
+            images
+        FROM exercises 
+        WHERE id = %s
+        """
         
-        current_app.logger.debug(f"Fetched details for exercise {exercise_id}")
+        result = get_db().execute_query(query, (exercise_id,))
         
         if result and len(result) > 0:
             row = result[0]
+            
+            # Parse JSON fields
+            try:
+                primary_muscles = json.loads(row[6]) if row[6] else []
+                secondary_muscles = json.loads(row[7]) if row[7] else []
+                instructions = json.loads(row[8]) if row[8] else []
+                images = json.loads(row[9]) if row[9] else []
+                
+                # Generate presigned URLs for images
+                s3_manager = current_app.s3_manager
+                bucket_name = 'proveit-exercises-directories'
+                
+                updated_images = []
+                for image_url in images:
+                    if image_url:
+                        object_key = image_url.split(f's3://{bucket_name}/')[1]
+                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                        updated_images.append(presigned_url if presigned_url else None)
+                    else:
+                        updated_images.append(None)
+                
+                images = updated_images
+                
+            except json.JSONDecodeError as e:
+                current_app.logger.error(f"JSON decode error for exercise {exercise_id}: {e}")
+                primary_muscles, secondary_muscles, instructions, images = [], [], [], []
+            
             exercise_dict = {
                 'id': exercise_id,
                 'name': row[0],
@@ -111,35 +290,19 @@ def fetch_exercise_details(exercise_id):
                 'mechanic': row[3],
                 'equipment': row[4],
                 'category': row[5],
-                'primary_muscles': row[6],
-                'secondary_muscles': row[7],
-                'instructions': row[8],
-                'image1_path': row[9],
-                'image2_path': row[11]
+                'primary_muscles': primary_muscles,
+                'secondary_muscles': secondary_muscles,
+                'instructions': instructions,
+                'images': images
             }
             
-            # Process image1
-            if row[10]:  # row[12] is image1 data
-                image1_base64 = base64.b64encode(row[10]).decode('utf-8')
-                exercise_dict['image1'] = f"data:image/jpeg;base64,{image1_base64}"
-            else:
-                current_app.logger.debug(f"No image1 found for exercise {exercise_id}")
-                exercise_dict['image1'] = None
-            
-            # Process image2
-            if row[12]:  # row[12] is image2 data
-                image2_base64 = base64.b64encode(row[12]).decode('utf-8')
-                exercise_dict['image2'] = f"data:image/jpeg;base64,{image2_base64}"
-            else:
-                current_app.logger.debug(f"No image2 found for exercise {exercise_id}")
-                exercise_dict['image2'] = None
-            
-            current_app.logger.debug(f"Processed details for exercise {exercise_id}")
-            
+            # Salvează în cache pentru 24 ore
+            redis_manager.set(cache_key, exercise_dict, expires_in=24*3600)
+            current_app.logger.debug(f"Cached details for exercise {exercise_id}")
             return exercise_dict
-        else:
-            current_app.logger.debug(f"No details found for exercise {exercise_id}")
-            return None
+            
+        return None
+        
     except SQLAlchemyError as e:
         current_app.logger.error(f"Database error in fetch_exercise_details: {e}")
         return None
