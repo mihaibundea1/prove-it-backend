@@ -4,3 +4,6 @@ bcrypt
 boto3
 mysql
 mysql-connector-python
+redis
+pillow
+pika
