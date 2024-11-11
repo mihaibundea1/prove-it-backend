@@ -12,7 +12,7 @@ gemini_bp = Blueprint('gemini', __name__, url_prefix='/gemini')
 # Get the API key from the environment
 gemini_api_key = os.getenv('GEMINI_API_KEY')
 
-@gemini_bp.route('/generate-content', methods=['POST'])
+@gemini_bp.route('/generate-workout', methods=['POST'])
 def generate_content():
     if not gemini_api_key:
         return jsonify({'error': 'GEMINI_API_KEY not configured'}), 500
