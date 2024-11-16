@@ -6,49 +6,40 @@ exercises_bp = Blueprint('exercises', __name__)
 @exercises_bp.route('/all', methods=['GET'])
 def get_all_exercises():
     try:
-        # Get query parameters
+        cache_manager = current_app.exercises_cache
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 100, type=int)
         
-        # Get filters from query parameters
-        filters = {}
-        if request.args.get('force'):
-            filters['force'] = request.args.get('force')
-        if request.args.get('level'):
-            filters['level'] = request.args.get('level')
-        if request.args.get('mechanic'):
-            filters['mechanic'] = request.args.get('mechanic')
-        if request.args.get('equipment'):
-            filters['equipment'] = request.args.get('equipment')
-        if request.args.get('category'):
-            filters['category'] = request.args.get('category')
-        if request.args.get('search'):
-            filters['search'] = request.args.get('search')
+        # Obținem exercițiile
+        exercises = cache_manager.get_exercises()
+        if not exercises:
+            exercises = fetch_all_exercises(limit=1000)
+            cache_manager.set_exercises(exercises)
+            
+            # Punem în coadă procesarea imaginilor
+            for exercise in exercises:
+                if exercise.get('image', {}).get('uri'):
+                    current_app.image_processor.queue_image_processing(
+                        exercise_id=exercise['id'],
+                        image_url=exercise['image']['uri']
+                    )
         
-        # Debug print
-        print(f"Page: {page}, Limit: {limit}, Filters: {filters}")
-        
-        # Get exercises
-        exercises = fetch_all_exercises(
-            filters=filters if filters else None,
-            page=page,
-            limit=limit
-        )
+        # Aplicăm paginarea
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
         
         return jsonify({
-            'exercises': exercises,
+            'exercises': exercises[start_idx:end_idx],
             'page': page,
             'limit': limit,
-            'total': len(exercises)
+            'total': len(exercises),
+            'thumbnails_processing': True
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error in fetch_all_exercises: {e}")
-        return jsonify({
-            'error': 'An error occurred while fetching exercises',
-            'exercises': []
-        })
-
+        current_app.logger.error(f"Error: {e}")
+        return jsonify({'error': str(e)}), 500
+    
 @exercises_bp.route('/groups', methods=['GET'])
 def get_exercise_groups():
     try:

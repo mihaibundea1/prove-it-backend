@@ -12,6 +12,14 @@ class S3Manager:
         self.region_name = region_name
         self.s3_client = self.create_s3_client()
 
+    def get_object(self, bucket_name, key):
+        try:
+            response = self.s3.get_object(Bucket=bucket_name, Key=key)
+            return response['Body'].read()  # Return the file content
+        except Exception as e:
+            print(f"Error fetching object from S3: {e}")
+            return None
+
     def create_s3_client(self):
         """
         Create an S3 client using boto3.

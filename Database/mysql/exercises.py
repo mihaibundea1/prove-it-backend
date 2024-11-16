@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 from core.redis_manager import RedisManager
-from utils.image_processing import resize_and_cache_image
 import json
 
 def get_db():
@@ -17,13 +16,13 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
         limit = int(limit) if isinstance(limit, str) else limit
         offset = (page - 1) * limit
         
-        redis_manager = get_redis()
+        redis_manager = RedisManager()
         cache_key = f"exercises:all:limit:{limit}:offset:{offset}"
         
         cached_exercises = redis_manager.get(cache_key)
         if cached_exercises:
             current_app.logger.debug(f"Retrieved exercises from cache")
-            return process_exercises_images(cached_exercises)
+            return cached_exercises  # Eliminăm apelul la process_exercises_images
             
         query = """
             SELECT DISTINCT
@@ -65,7 +64,7 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
                 
                 exercise = {
                     'id': row['id'],
-                    'title': row['name'],  # Changed from 'name' to 'title' for frontend
+                    'title': row['name'],
                     'force': row['force'],
                     'level': row['level'],
                     'mechanic': row['mechanic'],
@@ -74,7 +73,7 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
                     'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
                     'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
                     'instructions': json.loads(row['instructions']) if row['instructions'] else [],
-                    'image': {  # Format expected by frontend
+                    'image': {
                         'uri': image_urls[0] if image_urls else None
                     }
                 }
@@ -83,13 +82,22 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
             redis_manager.set(cache_key, exercises, expires_in=12*3600)
             current_app.logger.debug(f"Cached {len(exercises)} exercises")
             
+            # Queue images for processing if image processor exists
+            if hasattr(current_app, 'image_processor'):
+                for exercise in exercises:
+                    if exercise.get('image', {}).get('uri'):
+                        current_app.image_processor.queue_image_processing(
+                            exercise['id'],
+                            exercise['image']['uri']
+                        )
+            
             return exercises
         return []
         
     except Exception as e:
         current_app.logger.error(f"Database error in fetch_all_exercises: {e}")
         return []
-
+    
 def process_exercises_images(exercises):
     """Process cached exercises to update image URLs"""
     try:

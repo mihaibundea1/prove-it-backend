@@ -53,6 +53,13 @@ class RabbitMQManager:
             self.logger.error(f"Failed to initialize RabbitMQ connection: {e}")
             raise
 
+    @property
+    def channel(self):
+        if not self._channel or self._channel.is_closed:
+            self._create_channel()
+        return self._channel
+    
+
     def ensure_connection(f):
         """Decorator to ensure connection is active"""
         @wraps(f)
@@ -66,11 +73,15 @@ class RabbitMQManager:
     
     def _connect(self) -> None:
         """Establish connection to RabbitMQ"""
-        try:
-            self._connection = pika.BlockingConnection(self.parameters)
-        except Exception as e:
-            self.logger.error(f"Failed to connect to RabbitMQ: {e}")
-            raise
+        retries = 3
+        for _ in range(retries):
+            try:
+                self._connection = pika.BlockingConnection(self.parameters)
+                return
+            except Exception as e:
+                self.logger.error(f"Failed to connect to RabbitMQ: {e}")
+                time.sleep(5)  # Retry after a short delay
+        raise Exception("Failed to connect to RabbitMQ after retries.")
             
     def _create_channel(self) -> None:
         """Create a channel"""
@@ -153,6 +164,7 @@ class RabbitMQManager:
         """Perform a health check"""
         try:
             if self._connection and not self._connection.is_closed:
+                self._connection.process_data_events(time_limit=1)
                 return True
             self._connect()
             return True
@@ -169,6 +181,15 @@ class RabbitMQManager:
                 self._connection.close()
         except Exception as e:
             self.logger.error(f"Failed to close RabbitMQ connection: {e}")
+    
+    @ensure_connection
+    def set_qos(self, prefetch_count: int) -> None:
+        """Setează Quality of Service (QoS) pentru canal"""
+        try:
+            self._channel.basic_qos(prefetch_count=prefetch_count)
+        except Exception as e:
+            self.logger.error(f"Failed to set QoS: {e}")
+            raise
             
     @contextmanager
     def get_channel(self):
