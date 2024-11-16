@@ -13,40 +13,22 @@ class ImageProcessor:
     și stocarea lor în cache.
     """
     
-    def __init__(self, redis_manager: RedisManager, s3_manager: Any, rabbitmq_manager: Any):
+    def __init__(self, redis_manager: RedisManager, s3_manager: Any):
+        """
+        Inițializează procesorul de imagini.
+        
+        Args:
+            redis_manager: Manager pentru Redis cache
+            s3_manager: Manager pentru Amazon S3
+        """
         self.redis = redis_manager
         self.s3_manager = s3_manager
-        self.rabbitmq_manager = rabbitmq_manager
         self.image_prefix = "exercise:image:"
         self.thumbnail_size = (128, 128)
         self.cache_ttl = timedelta(hours=12)
         self.bucket_name = 'proveit-exercises-directories'
         self.logger = logging.getLogger(__name__)
         
-    def start_processing(self):
-        """
-        Începe procesarea imaginilor din coadă
-        """
-        try:
-            def callback(ch, method, properties, body):
-                try:
-                    self.process_image_message(body)
-                    ch.basic_ack(delivery_tag=method.delivery_tag)
-                except Exception as e:
-                    self.logger.error(f"Error processing message: {e}")
-                    # Requeue message if needed
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-            
-            self.rabbitmq_manager.channel.basic_qos(prefetch_count=1)
-            self.rabbitmq_manager.consume(queue_name="image_processing", callback=callback, auto_ack=False)
-            self.logger.info("Started image processing worker")
-            
-        except Exception as e:
-            self.logger.error(f"Error starting image processing worker: {e}")
-            
-        finally:
-            self.rabbitmq_manager.close()
-
     def process_image_message(self, message_body: bytes) -> None:
         """
         Procesează un mesaj pentru o imagine primit de la RabbitMQ.
@@ -131,7 +113,6 @@ class ImageProcessor:
                 
                 # Convertește la base64
                 image_base64 = base64.b64encode(image_data).decode('utf-8')
-                print(exercise_id)
                 return f"data:image/jpeg;base64,{image_base64}"
                 
         except Exception as e:

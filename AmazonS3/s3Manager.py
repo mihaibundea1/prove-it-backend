@@ -14,7 +14,7 @@ class S3Manager:
 
     def get_object(self, bucket_name, key):
         try:
-            response = self.s3.get_object(Bucket=bucket_name, Key=key)
+            response = self.s3_client.get_object(Bucket=bucket_name, Key=key)
             return response['Body'].read()  # Return the file content
         except Exception as e:
             print(f"Error fetching object from S3: {e}")

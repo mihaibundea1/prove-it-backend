@@ -8,7 +8,7 @@ def get_all_exercises():
     try:
         cache_manager = current_app.exercises_cache
         page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 100, type=int)
+        limit = request.args.get('limit', 1000, type=int)
         
         # Obținem exercițiile
         exercises = cache_manager.get_exercises()

@@ -15,7 +15,6 @@ from routes.questions import questions_bp
 from core.redis_manager import RedisManager
 from core.rabbitmq_manager import RabbitMQManager
 from core.redis.exercises_cache_manager import ExercisesCacheManager
-from core.utils.image_processor import ImageProcessor
 
 # Load environment variables
 load_dotenv()
@@ -63,10 +62,6 @@ def initialize_app(app):
 
     initialize_message_brokers(app)
     initialize_cache_managers(app)
-    
-    # Add this line to initialize workers
-    initialize_workers(app)
-    
     print("App initialization complete.")
 
 def initialize_cache_managers(app):
@@ -110,40 +105,6 @@ def initialize_message_brokers(app):
     except Exception as e:
         print(f"Warning: RabbitMQ initialization failed: {e}")
         app.rabbitmq_manager = None
-
-def initialize_workers(app):
-    print(1)
-    def shutdown_worker():
-        app.logger.info("Shutting down image processing worker...")
-        app.image_processor.rabbitmq_manager.close()
-    
-    """Inițializează procesarea imaginilor"""
-    try:
-        print(2)
-        app.logger.info("Initializing image processor...")
-        
-        # Creăm procesorul de imagini
-        app.image_processor = ImageProcessor(
-            redis_manager=app.redis_manager,
-            s3_manager=app.s3_manager,
-            rabbitmq_manager=app.rabbitmq_manager
-        )
-        
-        print("Starting image processing worker thread...")
-        
-        # Pornim worker-ul într-un thread separat
-        import threading
-        import atexit
-        atexit.register(shutdown_worker)
-    
-        worker_thread = threading.Thread(target=app.image_processor.start_processing)
-        worker_thread.start()
-        
-        app.logger.info("Image processor initialized successfully.")
-        
-    except Exception as e:
-        app.logger.error(f"Failed to initialize image processor: {e}")
-
 
 def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')
