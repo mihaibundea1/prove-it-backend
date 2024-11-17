@@ -59,7 +59,6 @@ class RabbitMQManager:
             self._create_channel()
         return self._channel
     
-
     def ensure_connection(f):
         """Decorator to ensure connection is active"""
         @wraps(f)

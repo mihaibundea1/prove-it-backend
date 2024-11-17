@@ -10,21 +10,25 @@ def get_all_exercises():
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 1000, type=int)
         
-        # Obținem exercițiile
+        # Get exercises from cache
         exercises = cache_manager.get_exercises()
-        if not exercises:
-            exercises = fetch_all_exercises(limit=1000)
-            cache_manager.set_exercises(exercises)
-            
-            # Punem în coadă procesarea imaginilor
-            for exercise in exercises:
-                if exercise.get('image', {}).get('uri'):
-                    current_app.image_processor.queue_image_processing(
-                        exercise_id=exercise['id'],
-                        image_url=exercise['image']['uri']
-                    )
+        thumbnails_processing = False
         
-        # Aplicăm paginarea
+        # If cache is empty, initialize it
+        if not exercises:
+            current_app.logger.info("Cache miss - initializing cache")
+            num_exercises = cache_manager.initialize_cache()
+            if num_exercises > 0:
+                exercises = cache_manager.get_exercises()
+                thumbnails_processing = True  # New cache always needs processing
+            else:
+                current_app.logger.error("Failed to initialize cache")
+                return jsonify({'error': 'Failed to fetch exercises'}), 500
+        else:
+            # Check for missing thumbnails in existing cache
+            thumbnails_processing = cache_manager.check_missing_thumbnails(exercises)
+        
+        # Apply pagination
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
         
@@ -33,11 +37,11 @@ def get_all_exercises():
             'page': page,
             'limit': limit,
             'total': len(exercises),
-            'thumbnails_processing': True
+            'thumbnails_processing': thumbnails_processing
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error: {e}")
+        current_app.logger.error(f"Error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
     
 @exercises_bp.route('/groups', methods=['GET'])

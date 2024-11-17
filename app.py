@@ -15,12 +15,16 @@ from routes.questions import questions_bp
 from core.redis_manager import RedisManager
 from core.rabbitmq_manager import RabbitMQManager
 from core.redis.exercises_cache_manager import ExercisesCacheManager
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Load environment variables
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
+    logger = setup_logging(app)
+    logger.info("Starting application...")
 
     @app.route('/', methods=['GET'])
     def get_questions():
@@ -65,18 +69,17 @@ def initialize_app(app):
     print("App initialization complete.")
 
 def initialize_cache_managers(app):
-    """Initialize cache managers and preload data"""
+    """Initialize cache managers and publish messages for image processing"""
     try:
-        print("Starting cache initialization...")
         app.exercises_cache = ExercisesCacheManager()
         
-        # Preîncarcă exercițiile în cache folosind S3Manager
+        # Inițializează cache-ul și publică mesaje pentru procesare
         with app.app_context():
-            total_exercises = app.exercises_cache.initialize_cache(app.s3_manager)
-            print(f"Cache initialization completed with {total_exercises} exercises")
+            total_exercises = app.exercises_cache.initialize_cache()
+            app.logger.info(f"Cache initialization completed with {total_exercises} exercises")
             
     except Exception as e:
-        print(f"Warning: Cache initialization failed: {e}")
+        app.logger.error(f"Warning: Cache initialization failed: {e}")
         app.exercises_cache = None
 
 def initialize_message_brokers(app):
@@ -182,6 +185,42 @@ def cleanup_connections(app):
             app.exercises_cache.clear_exercise_cache()
         except:
             pass
+
+def setup_logging(app):
+    """Configurare logging pentru aplicație"""
+    # Creare director pentru loguri
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+        
+    # Configurare formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Handler pentru fișier
+    file_handler = RotatingFileHandler(
+        'logs/app.log',
+        maxBytes=1024 * 1024,
+        backupCount=5
+    )
+    file_handler.setFormatter(formatter)
+    
+    # Handler pentru consolă
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    # Configurare root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    
+    # Setare logger pentru Flask
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(console_handler)
+    app.logger.setLevel(logging.INFO)
+    
+    return app.logger
 
 if __name__ == '__main__':
     app = create_app()
