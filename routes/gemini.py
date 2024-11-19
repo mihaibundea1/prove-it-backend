@@ -20,7 +20,7 @@ def generate_content():
     data = request.get_json()
     if not data or 'prompt' not in data:
         return jsonify({'error': 'Missing prompt in request body'}), 400
-    
+
     headers = {
         'Content-Type': 'application/json'
     }
@@ -36,7 +36,7 @@ def generate_content():
             }
         ]
     }
-    
+
     try:
         response = requests.post(
             api_url,
@@ -51,33 +51,32 @@ def generate_content():
         if 'candidates' in response_data and response_data['candidates']:
             candidate = response_data['candidates'][0]
             
-            # Extract useful information
+            # Extract content and other details
             result = {
                 'content': candidate['content']['parts'][0]['text'],
-                'finish_reason': candidate['finishReason'],
+                'finish_reason': candidate.get('finishReason', 'unknown'),
                 'safety_ratings': {
                     rating['category']: rating['probability']
-                    for rating in candidate['safetyRatings']
+                    for rating in candidate.get('safetyRatings', [])
                 },
                 'usage': {
-                    'prompt_tokens': response_data['usageMetadata']['promptTokenCount'],
-                    'response_tokens': response_data['usageMetadata']['candidatesTokenCount'],
-                    'total_tokens': response_data['usageMetadata']['totalTokenCount']
+                    'prompt_tokens': response_data.get('usageMetadata', {}).get('promptTokenCount', 0),
+                    'response_tokens': response_data.get('usageMetadata', {}).get('candidatesTokenCount', 0),
+                    'total_tokens': response_data.get('usageMetadata', {}).get('totalTokenCount', 0)
                 }
             }
             
             return jsonify(result)
         
         return jsonify({'error': 'No content generated'}), 500
-        
+
     except requests.exceptions.RequestException as e:
         error_message = str(e)
-        if response is not None:
-            try:
-                error_data = response.json()
-                error_message = error_data.get('error', {}).get('message', str(e))
-            except:
-                pass
+        try:
+            error_data = response.json()
+            error_message = error_data.get('error', {}).get('message', str(e))
+        except Exception:
+            pass
         return jsonify({
             'error': 'Failed to generate content',
             'details': error_message
