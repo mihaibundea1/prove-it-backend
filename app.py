@@ -96,18 +96,19 @@ def initialize_message_brokers(app):
         app.redis_manager = None
 
     # Initialize RabbitMQ
-    try:
-        app.rabbitmq_manager = RabbitMQManager()
-        if app.rabbitmq_manager.health_check():
-            print("RabbitMQ initialization successful")
+    # commented for now
+    # try:
+    #     app.rabbitmq_manager = RabbitMQManager()
+    #     if app.rabbitmq_manager.health_check():
+    #         print("RabbitMQ initialization successful")
             
-            # Optional: Setup default exchanges/queues
-            app.rabbitmq_manager.declare_queue('default_queue', durable=True)
-        else:
-            print("Warning: RabbitMQ health check failed")
-    except Exception as e:
-        print(f"Warning: RabbitMQ initialization failed: {e}")
-        app.rabbitmq_manager = None
+    #         # Optional: Setup default exchanges/queues
+    #         app.rabbitmq_manager.declare_queue('default_queue', durable=True)
+    #     else:
+    #         print("Warning: RabbitMQ health check failed")
+    # except Exception as e:
+    #     print(f"Warning: RabbitMQ initialization failed: {e}")
+    #     app.rabbitmq_manager = None
 
 def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')

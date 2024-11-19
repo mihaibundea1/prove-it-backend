@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 from core.redis_manager import RedisManager
 import json
+import base64
 
 def get_db():
     return current_app.mysql_db
@@ -9,7 +10,7 @@ def get_db():
 def get_redis():
     return RedisManager()
 
-def fetch_all_exercises(filters=None, page=1, limit=100):
+def fetch_all_exercises(filters=None, page=1, limit=1000):
     try:
         # Ensure page and limit are integers
         page = int(page) if isinstance(page, str) else page
@@ -22,7 +23,7 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
         cached_exercises = redis_manager.get(cache_key)
         if cached_exercises:
             current_app.logger.debug(f"Retrieved exercises from cache")
-            return cached_exercises  # Eliminăm apelul la process_exercises_images
+            return cached_exercises
             
         query = """
             SELECT DISTINCT
@@ -36,7 +37,8 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
                 e.primary_muscles,
                 e.secondary_muscles,
                 e.instructions,
-                e.images
+                e.images,
+                e.thumbnail
             FROM exercises e
             WHERE 1=1
             LIMIT %s OFFSET %s
@@ -53,14 +55,22 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
                 # Parse images JSON string to list
                 images = json.loads(row['images']) if row['images'] else []
                 
-                # Generate presigned URLs for all images
+                # Generate presigned URLs for images
                 image_urls = []
                 for image_path in images:
-                    if image_path.startswith(f's3://{bucket_name}/'):
+                    if isinstance(image_path, bytes):
+                        image_path = image_path.decode('utf-8')
+                    if isinstance(image_path, str) and image_path.startswith(f's3://{bucket_name}/'):
                         object_key = image_path.split(f's3://{bucket_name}/')[1]
                         presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
                         if presigned_url:
                             image_urls.append(presigned_url)
+                
+                # Process thumbnail blob
+                thumbnail_data = None
+                if row['thumbnail']:
+                    # Convertim blob-ul în base64 pentru a putea fi afișat în browser
+                    thumbnail_data = f"data:image/webp;base64,{base64.b64encode(row['thumbnail']).decode('utf-8')}"
                 
                 exercise = {
                     'id': row['id'],
@@ -75,23 +85,26 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
                     'instructions': json.loads(row['instructions']) if row['instructions'] else [],
                     'image': {
                         'uri': image_urls[0] if image_urls else None
+                    },
+                    'thumbnail': {
+                        'uri': thumbnail_data
                     }
                 }
                 exercises.append(exercise)
                 
-            redis_manager.set(cache_key, exercises, expires_in=12*3600)
+            redis_manager.set(cache_key, exercises, expires_in=24*3600)
             current_app.logger.debug(f"Cached {len(exercises)} exercises")
             
-            # Queue images for processing if image processor exists
-            if hasattr(current_app, 'image_processor'):
-                for exercise in exercises:
-                    if exercise.get('image', {}).get('uri'):
-                        current_app.image_processor.queue_image_processing(
-                            exercise['id'],
-                            exercise['image']['uri']
-                        )
+            # # Queue images for processing if image processor exists
+            # if hasattr(current_app, 'image_processor'):
+            #     for exercise in exercises:
+            #         if exercise.get('image', {}).get('uri'):
+            #             current_app.image_processor.queue_image_processing(
+            #                 exercise['id'],
+            #                 exercise['image']['uri']
+            #             )
             
-            return exercises
+            # return exercises
         return []
         
     except Exception as e:
