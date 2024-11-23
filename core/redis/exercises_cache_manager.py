@@ -47,34 +47,22 @@ class ExercisesCacheManager:
             return False
         
     def set_exercises(self, exercises: List[Dict]) -> bool:
-        """Set exercises in cache and queue them for image processing"""
+        """Set exercises in cache"""
         try:
             self.logger.info(f"Setting {len(exercises)} exercises in cache")
             
-            # Initialize thumbnails to None if not present
-            for exercise in exercises:
-                if 'image' in exercise:
-                    exercise['image']['thumbnail'] = None
-                    
-            # Save to Redis
+            # Direct save to Redis without modifying thumbnails
             success = self.redis.set(
                 key=self.exercises_key,
                 value=exercises,
-                expires_in=self.cache_ttl  # Changed from ex to expires_in
+                expires_in=self.cache_ttl
             )
             
             if not success:
                 self.logger.error("Failed to save exercises to Redis")
                 return False
             
-            # Queue image processing
-            self.rabbitmq.publish(
-                queue_name=self.queue_name,
-                message={'action': 'process_exercises', 'count': len(exercises)},
-                persistent=True
-            )
-            
-            self.logger.info(f"Successfully cached {len(exercises)} exercises and queued for processing")
+            self.logger.info(f"Successfully cached {len(exercises)} exercises")
             return True
         
         except Exception as e:

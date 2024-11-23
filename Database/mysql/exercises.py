@@ -17,14 +17,17 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
         limit = int(limit) if isinstance(limit, str) else limit
         offset = (page - 1) * limit
         
-        redis_manager = RedisManager()
-        cache_key = f"exercises:all:limit:{limit}:offset:{offset}"
+        redis_manager = get_redis()
+        cache_key = "exercises:all"  # Simplified cache key since we're caching all exercises
         
+        # Try to get exercises from cache first
         cached_exercises = redis_manager.get(cache_key)
         if cached_exercises:
-            current_app.logger.debug(f"Retrieved exercises from cache")
+            current_app.logger.debug("Retrieved exercises from cache")
             return cached_exercises
             
+        # If not in cache, fetch from database
+        current_app.logger.info("Cache miss, fetching from database")
         query = """
             SELECT DISTINCT
                 e.id,
@@ -69,8 +72,7 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
                 # Process thumbnail blob
                 thumbnail_data = None
                 if row['thumbnail']:
-                    # Convertim blob-ul în base64 pentru a putea fi afișat în browser
-                    thumbnail_data = f"data:image/webp;base64,{base64.b64encode(row['thumbnail']).decode('utf-8')}"
+                    thumbnail_data = f"data:image/jpeg;strict;base64,{base64.b64encode(row['thumbnail']).decode('utf-8')}"
                 
                 exercise = {
                     'id': row['id'],
@@ -88,49 +90,22 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
                     },
                     'thumbnail': {
                         'uri': thumbnail_data
-                    }
+                    } if thumbnail_data else None
                 }
                 exercises.append(exercise)
-                
-            redis_manager.set(cache_key, exercises, expires_in=24*3600)
-            current_app.logger.debug(f"Cached {len(exercises)} exercises")
             
-            # # Queue images for processing if image processor exists
-            # if hasattr(current_app, 'image_processor'):
-            #     for exercise in exercises:
-            #         if exercise.get('image', {}).get('uri'):
-            #             current_app.image_processor.queue_image_processing(
-            #                 exercise['id'],
-            #                 exercise['image']['uri']
-            #             )
+            # Cache all exercises
+            if exercises:
+                redis_manager.set(cache_key, exercises, expires_in=24*3600)
+                current_app.logger.debug(f"Cached {len(exercises)} exercises")
             
-            # return exercises
+            return exercises
+            
         return []
         
     except Exception as e:
         current_app.logger.error(f"Database error in fetch_all_exercises: {e}")
         return []
-    
-def process_exercises_images(exercises):
-    """Process cached exercises to update image URLs"""
-    try:
-        s3_manager = current_app.s3_manager
-        bucket_name = 'proveit-exercises-directories'
-        
-        for exercise in exercises:
-            if exercise.get('images'):
-                images = json.loads(exercise['images']) if isinstance(exercise['images'], str) else exercise['images']
-                if images and len(images) > 0:
-                    image_path = images[0]
-                    if image_path.startswith(f's3://{bucket_name}/'):
-                        object_key = image_path.split(f's3://{bucket_name}/')[1]
-                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
-                        exercise['image'] = {'uri': presigned_url} if presigned_url else {'uri': None}
-        
-        return exercises
-    except Exception as e:
-        current_app.logger.error(f"Error processing exercise images: {e}")
-        return exercises
 
 def fetch_exercise_groups():
     try:
