@@ -86,7 +86,7 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
                     'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
                     'instructions': json.loads(row['instructions']) if row['instructions'] else [],
                     'image': {
-                        'uri': image_urls[0] if image_urls else None
+                        'uri': image_urls
                     },
                     'thumbnail': {
                         'uri': thumbnail_data
