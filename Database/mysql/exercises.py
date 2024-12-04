@@ -51,23 +51,19 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
         
         if result:
             exercises = []
-            s3_manager = current_app.s3_manager
             bucket_name = 'proveit-exercises-directories'
             
             for row in result:
                 # Parse images JSON string to list
                 images = json.loads(row['images']) if row['images'] else []
                 
-                # Generate presigned URLs for images
+                # Keep original S3 paths
                 image_urls = []
                 for image_path in images:
                     if isinstance(image_path, bytes):
                         image_path = image_path.decode('utf-8')
                     if isinstance(image_path, str) and image_path.startswith(f's3://{bucket_name}/'):
-                        object_key = image_path.split(f's3://{bucket_name}/')[1]
-                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
-                        if presigned_url:
-                            image_urls.append(presigned_url)
+                        image_urls.append(image_path)
                 
                 # Process thumbnail blob
                 thumbnail_data = None
