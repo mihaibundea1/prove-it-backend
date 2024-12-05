@@ -12,21 +12,20 @@ def get_redis():
 
 def fetch_all_exercises(filters=None, page=1, limit=1000):
     try:
-        # Ensure page and limit are integers
         page = int(page) if isinstance(page, str) else page
         limit = int(limit) if isinstance(limit, str) else limit
         offset = (page - 1) * limit
         
         redis_manager = get_redis()
-        cache_key = "exercises:all"  # Simplified cache key since we're caching all exercises
+        cache_key = "exercises:all"
         
         # Try to get exercises from cache first
         cached_exercises = redis_manager.get(cache_key)
         if cached_exercises:
             current_app.logger.debug("Retrieved exercises from cache")
-            return cached_exercises
+            # Properly deserialize the cached data
+            return json.loads(cached_exercises)
             
-        # If not in cache, fetch from database
         current_app.logger.info("Cache miss, fetching from database")
         query = """
             SELECT DISTINCT
@@ -54,53 +53,67 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
             bucket_name = 'proveit-exercises-directories'
             
             for row in result:
-                # Parse images JSON string to list
-                images = json.loads(row['images']) if row['images'] else []
-                
-                # Keep original S3 paths
-                image_urls = []
-                for image_path in images:
-                    if isinstance(image_path, bytes):
-                        image_path = image_path.decode('utf-8')
-                    if isinstance(image_path, str) and image_path.startswith(f's3://{bucket_name}/'):
-                        image_urls.append(image_path)
-                
-                # Process thumbnail blob
-                thumbnail_data = None
-                if row['thumbnail']:
-                    thumbnail_data = f"data:image/jpeg;strict;base64,{base64.b64encode(row['thumbnail']).decode('utf-8')}"
-                
-                exercise = {
-                    'id': row['id'],
-                    'title': row['name'],
-                    'force': row['force'],
-                    'level': row['level'],
-                    'mechanic': row['mechanic'],
-                    'equipment': row['equipment'],
-                    'category': row['category'],
-                    'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
-                    'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
-                    'instructions': json.loads(row['instructions']) if row['instructions'] else [],
-                    'image': {
-                        'uri': image_urls
-                    },
-                    'thumbnail': {
-                        'uri': thumbnail_data
-                    } if thumbnail_data else None
-                }
-                exercises.append(exercise)
+                try:
+                    # Parse images JSON string to list
+                    images = json.loads(row['images']) if row['images'] else []
+                    
+                    # Keep original S3 paths
+                    image_urls = []
+                    for image_path in images:
+                        if isinstance(image_path, bytes):
+                            image_path = image_path.decode('utf-8')
+                        if isinstance(image_path, str) and image_path.startswith(f's3://{bucket_name}/'):
+                            image_urls.append(image_path)
+                    
+                    # Process thumbnail blob
+                    thumbnail_data = None
+                    if row['thumbnail']:
+                        thumbnail_data = base64.b64encode(row['thumbnail']).decode('utf-8')
+                        thumbnail_data = f"data:image/jpeg;strict;base64,{thumbnail_data}"
+                    
+                    exercise = {
+                        'id': row['id'],
+                        'title': row['name'],
+                        'force': row['force'],
+                        'level': row['level'],
+                        'mechanic': row['mechanic'],
+                        'equipment': row['equipment'],
+                        'category': row['category'],
+                        'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
+                        'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
+                        'instructions': json.loads(row['instructions']) if row['instructions'] else [],
+                        'image': {
+                            'uri': image_urls
+                        },
+                        'thumbnail': {
+                            'uri': thumbnail_data
+                        } if thumbnail_data else None
+                    }
+                    exercises.append(exercise)
+                    current_app.logger.debug(f"Processed exercise {row['id']} with {len(image_urls)} images")
+                except Exception as e:
+                    current_app.logger.error(f"Error processing exercise {row['id']}: {str(e)}")
+                    continue
             
-            # Cache all exercises
+            # Cache exercises as JSON string
             if exercises:
-                redis_manager.set(cache_key, exercises, expires_in=24*3600)
-                current_app.logger.debug(f"Cached {len(exercises)} exercises")
+                try:
+                    # Convert exercises list to JSON string
+                    exercises_json = json.dumps(exercises)
+                    # Store in Redis
+                    redis_manager.set(cache_key, exercises_json, expires_in=24*3600)
+                    current_app.logger.debug(f"Cached {len(exercises)} exercises in Redis")
+                except Exception as e:
+                    current_app.logger.error(f"Error caching exercises in Redis: {str(e)}")
             
             return exercises
             
         return []
         
     except Exception as e:
-        current_app.logger.error(f"Database error in fetch_all_exercises: {e}")
+        current_app.logger.error(f"Database error in fetch_all_exercises: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return []
 
 def fetch_exercise_groups():
