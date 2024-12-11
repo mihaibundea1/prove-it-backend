@@ -23,8 +23,8 @@ def fetch_all_exercises(filters=None, page=1, limit=1000):
         cached_exercises = redis_manager.get(cache_key)
         if cached_exercises:
             current_app.logger.debug("Retrieved exercises from cache")
-            # Properly deserialize the cached data
-            return json.loads(cached_exercises)
+            # Return the cached exercises as a list of dictionaries
+            return cached_exercises
             
         current_app.logger.info("Cache miss, fetching from database")
         query = """
