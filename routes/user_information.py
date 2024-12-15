@@ -5,6 +5,57 @@ import json
 
 user_information_bp = Blueprint('user_information', __name__)
 
+@user_information_bp.route('/register', methods=['POST'])
+def register_user_information():
+    db_user_data = current_app.user_data
+    data = request.get_json()
+
+    # Validăm că avem clerkId
+    if 'clerkId' not in data:
+        return jsonify({'error': 'Missing clerkId'}), 400
+
+    clerk_id = data['clerkId']
+
+    # Verificăm dacă utilizatorul există deja
+    existing_info = db_user_data.user_information.find_one({'clerkId': clerk_id})
+
+    if existing_info:
+        return jsonify({'error': 'User already exists'}), 409
+
+    # Creăm documentul nou
+    new_user = {
+        'clerkId': clerk_id,
+        'date_of_birth': data.get('date_of_birth'),
+        'height': data.get('height', 0),
+        'weight': data.get('weight', 0),
+        'bio': data.get('bio', ''),
+        'posts': [],
+        'post_count': 0,
+        'followers': [],
+        'followers_count': 0,
+        'following': [],
+        'following_count': 0,
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+        'updated_at': datetime.utcnow().isoformat() + 'Z',
+        'questions_completed': False,
+        'profile_completed': False,
+        'answers': {
+            'version': 1,
+            'responses': {}
+        }
+    }
+
+    try:
+        result = db_user_data.user_information.insert_one(new_user)
+        new_user['_id'] = str(result.inserted_id)
+        
+        return jsonify({
+            'message': 'User registered successfully',
+            'user': new_user
+        }), 201
+    except Exception as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
 @user_information_bp.route('/', methods=['GET'])
 def get_user_information():
     db_user_data = current_app.user_data
