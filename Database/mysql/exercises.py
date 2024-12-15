@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 from core.redis_manager import RedisManager
-from utils.image_processing import resize_and_cache_image
 import json
+import base64
 
 def get_db():
     return current_app.mysql_db
@@ -10,21 +10,23 @@ def get_db():
 def get_redis():
     return RedisManager()
 
-def fetch_all_exercises(filters=None, page=1, limit=100):
+def fetch_all_exercises(filters=None, page=1, limit=1000):
     try:
-        # Ensure page and limit are integers
         page = int(page) if isinstance(page, str) else page
         limit = int(limit) if isinstance(limit, str) else limit
         offset = (page - 1) * limit
         
         redis_manager = get_redis()
-        cache_key = f"exercises:all:limit:{limit}:offset:{offset}"
+        cache_key = "exercises:all"
         
+        # Try to get exercises from cache first
         cached_exercises = redis_manager.get(cache_key)
         if cached_exercises:
-            current_app.logger.debug(f"Retrieved exercises from cache")
-            return process_exercises_images(cached_exercises)
+            current_app.logger.debug("Retrieved exercises from cache")
+            # Return the cached exercises as a list of dictionaries
+            return cached_exercises
             
+        current_app.logger.info("Cache miss, fetching from database")
         query = """
             SELECT DISTINCT
                 e.id,
@@ -37,7 +39,8 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
                 e.primary_muscles,
                 e.secondary_muscles,
                 e.instructions,
-                e.images
+                e.images,
+                e.thumbnail
             FROM exercises e
             WHERE 1=1
             LIMIT %s OFFSET %s
@@ -47,69 +50,71 @@ def fetch_all_exercises(filters=None, page=1, limit=100):
         
         if result:
             exercises = []
-            s3_manager = current_app.s3_manager
             bucket_name = 'proveit-exercises-directories'
             
             for row in result:
-                # Parse images JSON string to list
-                images = json.loads(row['images']) if row['images'] else []
-                
-                # Generate presigned URLs for all images
-                image_urls = []
-                for image_path in images:
-                    if image_path.startswith(f's3://{bucket_name}/'):
-                        object_key = image_path.split(f's3://{bucket_name}/')[1]
-                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
-                        if presigned_url:
-                            image_urls.append(presigned_url)
-                
-                exercise = {
-                    'id': row['id'],
-                    'title': row['name'],  # Changed from 'name' to 'title' for frontend
-                    'force': row['force'],
-                    'level': row['level'],
-                    'mechanic': row['mechanic'],
-                    'equipment': row['equipment'],
-                    'category': row['category'],
-                    'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
-                    'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
-                    'instructions': json.loads(row['instructions']) if row['instructions'] else [],
-                    'image': {  # Format expected by frontend
-                        'uri': image_urls[0] if image_urls else None
+                try:
+                    # Parse images JSON string to list
+                    images = json.loads(row['images']) if row['images'] else []
+                    
+                    # Keep original S3 paths
+                    image_urls = []
+                    for image_path in images:
+                        if isinstance(image_path, bytes):
+                            image_path = image_path.decode('utf-8')
+                        if isinstance(image_path, str) and image_path.startswith(f's3://{bucket_name}/'):
+                            image_urls.append(image_path)
+                    
+                    # Process thumbnail blob
+                    thumbnail_data = None
+                    if row['thumbnail']:
+                        thumbnail_data = base64.b64encode(row['thumbnail']).decode('utf-8')
+                        thumbnail_data = f"data:image/jpeg;strict;base64,{thumbnail_data}"
+                    
+                    exercise = {
+                        'id': row['id'],
+                        'title': row['name'],
+                        'force': row['force'],
+                        'level': row['level'],
+                        'mechanic': row['mechanic'],
+                        'equipment': row['equipment'],
+                        'category': row['category'],
+                        'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
+                        'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
+                        'instructions': json.loads(row['instructions']) if row['instructions'] else [],
+                        'image': {
+                            'uri': image_urls
+                        },
+                        'thumbnail': {
+                            'uri': thumbnail_data
+                        } if thumbnail_data else None
                     }
-                }
-                exercises.append(exercise)
-                
-            redis_manager.set(cache_key, exercises, expires_in=12*3600)
-            current_app.logger.debug(f"Cached {len(exercises)} exercises")
+                    exercises.append(exercise)
+                    current_app.logger.debug(f"Processed exercise {row['id']} with {len(image_urls)} images")
+                except Exception as e:
+                    current_app.logger.error(f"Error processing exercise {row['id']}: {str(e)}")
+                    continue
+            
+            # Cache exercises as JSON string
+            if exercises:
+                try:
+                    # Convert exercises list to JSON string
+                    exercises_json = json.dumps(exercises)
+                    # Store in Redis
+                    redis_manager.set(cache_key, exercises_json, expires_in=24*3600)
+                    current_app.logger.debug(f"Cached {len(exercises)} exercises in Redis")
+                except Exception as e:
+                    current_app.logger.error(f"Error caching exercises in Redis: {str(e)}")
             
             return exercises
+            
         return []
         
     except Exception as e:
-        current_app.logger.error(f"Database error in fetch_all_exercises: {e}")
+        current_app.logger.error(f"Database error in fetch_all_exercises: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return []
-
-def process_exercises_images(exercises):
-    """Process cached exercises to update image URLs"""
-    try:
-        s3_manager = current_app.s3_manager
-        bucket_name = 'proveit-exercises-directories'
-        
-        for exercise in exercises:
-            if exercise.get('images'):
-                images = json.loads(exercise['images']) if isinstance(exercise['images'], str) else exercise['images']
-                if images and len(images) > 0:
-                    image_path = images[0]
-                    if image_path.startswith(f's3://{bucket_name}/'):
-                        object_key = image_path.split(f's3://{bucket_name}/')[1]
-                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
-                        exercise['image'] = {'uri': presigned_url} if presigned_url else {'uri': None}
-        
-        return exercises
-    except Exception as e:
-        current_app.logger.error(f"Error processing exercise images: {e}")
-        return exercises
 
 def fetch_exercise_groups():
     try:
@@ -210,99 +215,107 @@ def fetch_exercises_by_group(group_id, limit, offset):
         current_app.logger.error(f"Database error in fetch_exercises_by_group: {e}")
         return []
         
-    
 def fetch_exercise_details(exercise_id):
-    redis_manager = get_redis()
-    cache_key = f"exercise:details:{exercise_id}"
-    
     try:
-        # Încearcă să obții din cache
-        cached_exercise = redis_manager.get(cache_key)
-        if cached_exercise:
-            current_app.logger.debug(f"Retrieved exercise {exercise_id} details from cache")
-            # Generează URL-uri noi pentru imaginile din cache
-            s3_manager = current_app.s3_manager
-            bucket_name = 'proveit-exercises-directories'
-            
-            if isinstance(cached_exercise.get('images'), list):
-                updated_images = []
-                for image_url in cached_exercise['images']:
-                    if image_url:
-                        object_key = image_url.split(f's3://{bucket_name}/')[1]
-                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
-                        updated_images.append(presigned_url if presigned_url else None)
-                cached_exercise['images'] = updated_images
-                
-            return cached_exercise
+        current_app.logger.info(f"Attempting to fetch details for exercise: {exercise_id}")
         
         query = """
-        SELECT 
-            name, 
-            `force`, 
-            level, 
-            mechanic, 
-            equipment, 
-            category,
-            primary_muscles,
-            secondary_muscles,
-            instructions,
-            images
-        FROM exercises 
-        WHERE id = %s
+            SELECT name, `force`, level, mechanic, equipment, category,
+                   primary_muscles, secondary_muscles, instructions, images
+            FROM exercises 
+            WHERE id = %s
         """
         
-        result = get_db().execute_query(query, (exercise_id,))
+        current_app.logger.debug(f"Query: {query}")
+        current_app.logger.debug(f"Parameters: {exercise_id}")
+        
+        db = get_db()
+        result = db.execute_query(query, (exercise_id,))
+        
+        # Log the result type and content
+        current_app.logger.debug(f"Query result type: {type(result)}")
+        current_app.logger.debug(f"Query result content: {result}")
         
         if result and len(result) > 0:
             row = result[0]
+            current_app.logger.debug(f"Row type: {type(row)}")
+            current_app.logger.debug(f"Row content: {row}")
             
-            # Parse JSON fields
             try:
-                primary_muscles = json.loads(row[6]) if row[6] else []
-                secondary_muscles = json.loads(row[7]) if row[7] else []
-                instructions = json.loads(row[8]) if row[8] else []
-                images = json.loads(row[9]) if row[9] else []
+                # Handle both sequence and mapping types
+                if isinstance(row, (tuple, list)):
+                    exercise_dict = {
+                        'id': exercise_id,
+                        'name': row[0],
+                        'force': row[1],
+                        'level': row[2],
+                        'mechanic': row[3],
+                        'equipment': row[4],
+                        'category': row[5],
+                        'primary_muscles': json.loads(row[6]) if row[6] else [],
+                        'secondary_muscles': json.loads(row[7]) if row[7] else [],
+                        'instructions': json.loads(row[8]) if row[8] else [],
+                        'images': []
+                    }
+                else:  # Assuming it's a dictionary-like object
+                    exercise_dict = {
+                        'id': exercise_id,
+                        'name': row['name'],
+                        'force': row['force'],
+                        'level': row['level'],
+                        'mechanic': row['mechanic'],
+                        'equipment': row['equipment'],
+                        'category': row['category'],
+                        'primary_muscles': json.loads(row['primary_muscles']) if row['primary_muscles'] else [],
+                        'secondary_muscles': json.loads(row['secondary_muscles']) if row['secondary_muscles'] else [],
+                        'instructions': json.loads(row['instructions']) if row['instructions'] else [],
+                        'images': []
+                    }
                 
-                # Generate presigned URLs for images
-                s3_manager = current_app.s3_manager
-                bucket_name = 'proveit-exercises-directories'
+                current_app.logger.debug("Successfully created exercise dictionary")
                 
-                updated_images = []
-                for image_url in images:
-                    if image_url:
-                        object_key = image_url.split(f's3://{bucket_name}/')[1]
-                        presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
-                        updated_images.append(presigned_url if presigned_url else None)
-                    else:
-                        updated_images.append(None)
+                # Process images from S3 URLs
+                try:
+                    images_data = row['images'] if isinstance(row, dict) else row[9]
+                    image_urls = json.loads(images_data) if images_data else []
+                    current_app.logger.debug(f"Parsed image URLs: {image_urls}")
+                    
+                    if isinstance(image_urls, list):
+                        s3_manager = current_app.s3_manager
+                        bucket_name = 'proveit-exercises-directories'
+                        
+                        for image_url in image_urls:
+                            if image_url and 's3://' in image_url:
+                                try:
+                                    object_key = image_url.split(f's3://{bucket_name}/')[1]
+                                    current_app.logger.debug(f"Processing object key: {object_key}")
+                                    
+                                    presigned_url = s3_manager.generate_presigned_url(bucket_name, object_key)
+                                    if presigned_url:
+                                        exercise_dict['images'].append(presigned_url)
+                                        current_app.logger.debug(f"Added presigned URL for {object_key}")
+                                except Exception as e:
+                                    current_app.logger.error(f"Error generating presigned URL for {image_url}: {str(e)}")
+                                    continue
+                    
+                    current_app.logger.info(f"Successfully processed images for exercise {exercise_id}")
+                except json.JSONDecodeError as e:
+                    current_app.logger.error(f"JSON parsing error for images: {str(e)}")
+                except Exception as e:
+                    current_app.logger.error(f"Error processing images: {str(e)}")
                 
-                images = updated_images
+                return exercise_dict
+            except Exception as e:
+                current_app.logger.error(f"Error creating exercise dictionary: {str(e)}")
+                current_app.logger.error(f"Row data that caused error: {row}")
+                raise
                 
-            except json.JSONDecodeError as e:
-                current_app.logger.error(f"JSON decode error for exercise {exercise_id}: {e}")
-                primary_muscles, secondary_muscles, instructions, images = [], [], [], []
+        else:
+            current_app.logger.warning(f"No details found for exercise {exercise_id}")
+            return None
             
-            exercise_dict = {
-                'id': exercise_id,
-                'name': row[0],
-                'force': row[1],
-                'level': row[2],
-                'mechanic': row[3],
-                'equipment': row[4],
-                'category': row[5],
-                'primary_muscles': primary_muscles,
-                'secondary_muscles': secondary_muscles,
-                'instructions': instructions,
-                'images': images
-            }
-            
-            # Salvează în cache pentru 24 ore
-            redis_manager.set(cache_key, exercise_dict, expires_in=24*3600)
-            current_app.logger.debug(f"Cached details for exercise {exercise_id}")
-            return exercise_dict
-            
-        return None
-        
-    except SQLAlchemyError as e:
-        current_app.logger.error(f"Database error in fetch_exercise_details: {e}")
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in fetch_exercise_details: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Traceback: {traceback.format_exc()}")
         return None

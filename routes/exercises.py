@@ -6,49 +6,44 @@ exercises_bp = Blueprint('exercises', __name__)
 @exercises_bp.route('/all', methods=['GET'])
 def get_all_exercises():
     try:
-        # Get query parameters
+        cache_manager = current_app.exercises_cache
         page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 100, type=int)
+        limit = request.args.get('limit', 1000, type=int)
         
-        # Get filters from query parameters
-        filters = {}
-        if request.args.get('force'):
-            filters['force'] = request.args.get('force')
-        if request.args.get('level'):
-            filters['level'] = request.args.get('level')
-        if request.args.get('mechanic'):
-            filters['mechanic'] = request.args.get('mechanic')
-        if request.args.get('equipment'):
-            filters['equipment'] = request.args.get('equipment')
-        if request.args.get('category'):
-            filters['category'] = request.args.get('category')
-        if request.args.get('search'):
-            filters['search'] = request.args.get('search')
+        # Get exercises from cache
+        exercises = cache_manager.get_exercises()
+        thumbnails_processing = False
         
-        # Debug print
-        print(f"Page: {page}, Limit: {limit}, Filters: {filters}")
+        # If cache is empty, initialize it
+        if not exercises:
+            current_app.logger.info("Cache miss - initializing cache")
+            num_exercises = cache_manager.initialize_cache()
+            if num_exercises > 0:
+                exercises = cache_manager.get_exercises()
+                thumbnails_processing = True  # New cache always needs processing
+            else:
+                current_app.logger.error("Failed to initialize cache")
+                return jsonify({'error': 'Failed to fetch exercises'}), 500
+        else:
+            # Check for missing thumbnails in existing cache
+            thumbnails_processing = cache_manager.check_missing_thumbnails(exercises)
         
-        # Get exercises
-        exercises = fetch_all_exercises(
-            filters=filters if filters else None,
-            page=page,
-            limit=limit
-        )
+        # Apply pagination
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
         
         return jsonify({
-            'exercises': exercises,
+            'exercises': exercises[start_idx:end_idx],
             'page': page,
             'limit': limit,
-            'total': len(exercises)
+            'total': len(exercises),
+            'thumbnails_processing': thumbnails_processing
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error in fetch_all_exercises: {e}")
-        return jsonify({
-            'error': 'An error occurred while fetching exercises',
-            'exercises': []
-        })
-
+        current_app.logger.error(f"Error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+    
 @exercises_bp.route('/groups', methods=['GET'])
 def get_exercise_groups():
     try:

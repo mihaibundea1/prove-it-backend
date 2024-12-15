@@ -41,6 +41,9 @@ def get_user_info(credentials_id):
     # Convert followers and following lists to strings
     user_info['followers'] = [str(follower) for follower in user_info.get('followers', [])]
     user_info['following'] = [str(following) for following in user_info.get('following', [])]
+    
+    if 'answers' not in user_info:
+        user_info['answers'] = {}
 
     return jsonify(user_info), 200
 

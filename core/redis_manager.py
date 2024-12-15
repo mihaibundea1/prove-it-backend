@@ -39,7 +39,8 @@ class RedisManager:
                 retry_on_timeout=True
             )
             
-            self.default_ttl = 3600
+            # TTL set to 7 days (in seconds)
+            self.default_ttl = 7 * 24 * 60 * 60  # 604800            
             self.logger = logging.getLogger(__name__)
             
             # Verify connection
@@ -72,7 +73,7 @@ class RedisManager:
             return self.redis_client.set(
                 key, 
                 serialized_value,
-                ex=expires_in,
+                ex=expires_in,  # This is correct - converting to Redis's native parameter
                 nx=nx
             )
             
