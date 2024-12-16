@@ -2,9 +2,19 @@
 
 from functools import wraps
 from flask import request, jsonify
-from clerk_sdk_python import Clerk
+from clerk_backend_api import Clerk
 
-clerk = Clerk()
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY')
+if not CLERK_SECRET_KEY:
+   raise ValueError("CLERK_SECRET_KEY missing from environment variables")
+
+clerk = Clerk(CLERK_SECRET_KEY)
 
 def auth_required(f):
     @wraps(f)
@@ -23,6 +33,8 @@ def auth_required(f):
             # Add user info to flask.g for use in the route
             g.user_id = session.user_id
             g.session = session
+
+            print(auth_header)
             
             return f(*args, **kwargs)
         except Exception as e:
