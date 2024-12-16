@@ -6,10 +6,12 @@ from utils import s3_helpers
 from datetime import datetime
 from bson.objectid import ObjectId
 import os
+from middleware.auth import auth_required
 
 posts_bp = Blueprint('posts', __name__)
 
 @posts_bp.route('/', methods=['GET'])
+@auth_required
 def get_posts():
     # Pagination parameters
     page = request.args.get('page', 1, type=int)  # Get the page number, default is 1
@@ -48,6 +50,7 @@ def get_posts():
 
 
 @posts_bp.route('/', methods=['POST'])
+@auth_required
 def create_post():
     db_content = current_app.db_content
     db_user_data = current_app.user_data  # Access user data
@@ -106,6 +109,7 @@ def create_post():
         return jsonify({'error': f'Error uploading file or saving post: {str(e)}'}), 500
 
 @posts_bp.route('/like/<post_id>', methods=['POST'])
+@auth_required
 def like_post(post_id):
     db_content = current_app.db_content
     data = request.get_json()
@@ -137,6 +141,7 @@ def like_post(post_id):
     return jsonify({'message': 'Post liked successfully', 'like_id': like_id}), 200
 
 @posts_bp.route('/unlike/<post_id>/<like_id>', methods=['DELETE'])
+@auth_required
 def unlike_post(post_id, like_id):
     db_content = current_app.db_content
 
@@ -155,6 +160,7 @@ def unlike_post(post_id, like_id):
     return jsonify({'message': 'Post unliked successfully'}), 200
 
 @posts_bp.route('/comments/<post_id>', methods=['GET'])
+@auth_required
 def get_comments(post_id):
     db_content = current_app.db_content
     post = db_content.posts.find_one({'post_id': post_id}, {'comments': 1})
@@ -167,6 +173,7 @@ def get_comments(post_id):
 
 
 @posts_bp.route('/comment/<post_id>', methods=['POST'])
+@auth_required
 def comment_post(post_id):
     db_content = current_app.db_content
     data = request.get_json()
@@ -200,6 +207,7 @@ def comment_post(post_id):
     return jsonify({'message': 'Comment added successfully', 'comment_id': comment_id}), 200
 
 @posts_bp.route('/delete_comment/<post_id>/<comment_id>', methods=['DELETE'])
+@auth_required
 def delete_comment(post_id, comment_id):
     db_content = current_app.db_content
 
@@ -217,6 +225,7 @@ def delete_comment(post_id, comment_id):
     return jsonify({'message': 'Comment deleted successfully'}), 200
 
 @posts_bp.route('/delete_post/<object_id>', methods=['DELETE'])
+@auth_required
 def delete_post(object_id):
     try:
         db_content = current_app.db_content

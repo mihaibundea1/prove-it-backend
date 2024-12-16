@@ -1,10 +1,12 @@
 from flask import Blueprint, jsonify, request, current_app
 from bson import ObjectId
 from datetime import datetime
+from middleware.auth import auth_required
 
 workouts_bp = Blueprint('workouts', __name__)
 
 @workouts_bp.route('/<user_id>', methods=['GET'])
+@auth_required
 def get_exercises_by_user(user_id):
     try:
         # Access the saved_exercises collection
@@ -21,6 +23,7 @@ def get_exercises_by_user(user_id):
         return jsonify({"error": str(e)}), 500
 
 @workouts_bp.route('/', methods=['POST'])
+@auth_required
 def add_workout():
     try:
         current_app.logger.debug("POST request received at /workouts")
@@ -78,6 +81,7 @@ def add_workout():
         return jsonify({"error": str(e)}), 500
 
 @workouts_bp.route('/<user_id>/<workout_id>', methods=['PUT'])
+@auth_required
 def update_workout(user_id, workout_id):
     try:
         workout_data = request.get_json()
@@ -111,6 +115,7 @@ def update_workout(user_id, workout_id):
         return jsonify({"error": str(e)}), 500
 
 @workouts_bp.route('/<user_id>/<workout_id>', methods=['DELETE'])
+@auth_required
 def delete_workout(user_id, workout_id):
     try:
         exercises_collection = current_app.user_data.saved_exercises

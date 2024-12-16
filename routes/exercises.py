@@ -1,9 +1,11 @@
 from flask import Blueprint, jsonify, current_app, request
 from Database.mysql.exercises import fetch_all_exercises, fetch_exercise_groups, fetch_exercises_by_group, fetch_exercise_details
+from middleware.auth import auth_required
 
 exercises_bp = Blueprint('exercises', __name__)
 
 @exercises_bp.route('/all', methods=['GET'])
+@auth_required
 def get_all_exercises():
     try:
         cache_manager = current_app.exercises_cache
@@ -45,6 +47,7 @@ def get_all_exercises():
         return jsonify({'error': str(e)}), 500
     
 @exercises_bp.route('/groups', methods=['GET'])
+@auth_required
 def get_exercise_groups():
     try:
         exercise_groups = fetch_exercise_groups()
@@ -87,6 +90,7 @@ def get_exercise_groups():
         }), 500
     
 @exercises_bp.route('/<int:group_id>', methods=['GET'])
+@auth_required
 def get_exercises_by_group(group_id):
     try:
         page = request.args.get('page', 1, type=int)
@@ -139,6 +143,7 @@ def get_exercises_by_group(group_id):
         }), 500
     
 @exercises_bp.route('/details/<string:exercise_id>', methods=['GET'])
+@auth_required
 def get_exercise_details(exercise_id):
     try:
         current_app.logger.debug(f"Fetching details for exercise: {exercise_id}")
@@ -182,6 +187,7 @@ def get_exercise_details(exercise_id):
 
 # Adăugăm și endpoint-uri pentru managementul cache-ului
 @exercises_bp.route('/cache/clear', methods=['POST'])
+@auth_required
 def clear_cache():
     try:
         exercise_id = request.args.get('exercise_id')

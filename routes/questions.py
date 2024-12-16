@@ -3,6 +3,7 @@ from datetime import datetime
 from bson import ObjectId
 from scripts.question_updater import update_questions
 from scripts.question_checker import check_question_changes
+from middleware.auth import auth_required
 
 questions_bp = Blueprint('questions', __name__)
 
@@ -17,6 +18,7 @@ def serialize_object(obj):
     return obj
 
 @questions_bp.route('/', methods=['GET'])
+@auth_required
 def get_questions():
     questions_collection = current_app.db_content.questions
     latest_questions = questions_collection.find_one(sort=[("version", -1)])
@@ -28,6 +30,7 @@ def get_questions():
     return jsonify(serialize_object(latest_questions)), 200
 
 @questions_bp.route('/update_questions', methods=['POST'])
+@auth_required
 def api_update_questions():
     try:
         result = update_questions()  
@@ -36,11 +39,13 @@ def api_update_questions():
         return jsonify({"error": str(e)}), 500
     
 @questions_bp.route('/check_changes', methods=['GET'])
+@auth_required
 def check_changes():
     changes = check_question_changes()
     return jsonify(changes), 200
 
 @questions_bp.route('/submit_answers', methods=['POST'])
+@auth_required
 def submit_answers():
     data = request.json
     credentials_id = data.get("credentials_id")

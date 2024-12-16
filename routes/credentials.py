@@ -5,15 +5,19 @@ import re
 import bcrypt
 import json
 
+from middleware.auth import auth_required
+
 credentials_bp = Blueprint('credentials', __name__)
 
 @credentials_bp.route('/', methods=['GET'])
+@auth_required
 def get_credentials():
     db_user_data = current_app.user_data
     credentials = list(db_user_data.credentials.find({}, {'hashed_password': 0}))  # Exclude hashed_password
     return json.loads(json_util.dumps(credentials))
 
 @credentials_bp.route('/register', methods=['POST'])
+@auth_required
 def register_user():
     db_user_data = current_app.user_data
     data = request.get_json()
@@ -79,6 +83,7 @@ def register_user():
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 @credentials_bp.route('/login', methods=['POST'])
+@auth_required
 def login_user():
     db_user_data = current_app.user_data
     data = request.get_json()
@@ -145,6 +150,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 @credentials_bp.route('/search', methods=['GET'])
+@auth_required
+
 def search_credentials():
     db_user_data = current_app.user_data
     query = request.args.get('query', '').strip()

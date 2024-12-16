@@ -2,10 +2,12 @@ from flask import Blueprint, jsonify, request, current_app, session
 from bson import json_util, ObjectId
 from datetime import datetime
 import json
+from middleware.auth import auth_required
 
 user_information_bp = Blueprint('user_information', __name__)
 
 @user_information_bp.route('/register', methods=['POST'])
+@auth_required
 def register_user_information():
     db_user_data = current_app.user_data
     data = request.get_json()
@@ -57,6 +59,7 @@ def register_user_information():
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 @user_information_bp.route('/', methods=['GET'])
+@auth_required
 def get_user_information():
     db_user_data = current_app.user_data
     user_info = list(db_user_data.user_information.find({}))
@@ -64,6 +67,7 @@ def get_user_information():
     return json.loads(json_util.dumps(user_info))
 
 @user_information_bp.route('/<credentials_id>', methods=['GET'])
+@auth_required
 def get_user_info(credentials_id):
     db_user_data = current_app.user_data
     user_info = db_user_data.user_information.find_one({'credentials_id': ObjectId(credentials_id)})
@@ -101,6 +105,7 @@ def get_user_info(credentials_id):
 
 
 @user_information_bp.route('/update', methods=['POST'])
+@auth_required
 def update_user_information():
     db_user_data = current_app.user_data
     data = request.get_json()
@@ -132,6 +137,7 @@ def update_user_information():
     return jsonify({'message': 'User information updated successfully'}), 200
 
 @user_information_bp.route('/', methods=['POST'])
+@auth_required
 def save_user_information():
     db_user_data = current_app.user_data
     data = request.get_json()
@@ -208,6 +214,7 @@ def save_user_information():
 from bson import ObjectId  # Make sure you import ObjectId
 
 @user_information_bp.route('/follow/<id>', methods=['POST'])
+@auth_required
 def follow_user(id):
     db_user_data = current_app.user_data
 
@@ -239,6 +246,7 @@ def follow_user(id):
 
 
 @user_information_bp.route('/unfollow/<followee_id>', methods=['POST'])
+@auth_required
 def unfollow_user(followee_id):
     db_user_data = current_app.user_data
 
@@ -271,6 +279,7 @@ def unfollow_user(followee_id):
 
 
 @user_information_bp.route('/is_following/<target_user_id>', methods=['GET'])
+@auth_required
 def is_following(target_user_id):
     db_user_data = current_app.user_data
 

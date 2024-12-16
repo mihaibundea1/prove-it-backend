@@ -2,6 +2,7 @@ import os
 import requests
 from flask import Blueprint, jsonify, request
 from dotenv import load_dotenv
+from middleware.auth import auth_required
 
 # Load environment variables
 load_dotenv()
