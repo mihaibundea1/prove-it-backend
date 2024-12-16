@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from clerk_backend_api import Clerk
 from functools import wraps
 import os
@@ -122,8 +122,8 @@ def verify_email():
                 }
             }
             
-            # Aici ar trebui să adaugi logica pentru a salva user_info în baza ta de date
-            
+
+
             return jsonify({
                 'success': True,
                 'message': 'Email verified successfully'

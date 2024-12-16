@@ -12,6 +12,8 @@ def register_user_information():
     db_user_data = current_app.user_data
     data = request.get_json()
 
+    print("Received data:", data)  # Pentru debugging
+
     # Validăm că avem clerkId
     if 'clerkId' not in data:
         return jsonify({'error': 'Missing clerkId'}), 400
