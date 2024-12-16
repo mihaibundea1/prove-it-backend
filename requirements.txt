@@ -7,3 +7,4 @@ mysql-connector-python
 redis
 pillow
 pika
+clerk_sdk_python
