@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 from middleware.auth import auth_required
 
-user_information_bp = Blueprint('user_information', __name__)
+user_information_bp = Blueprint('users', __name__)
 
 @user_information_bp.route('/register', methods=['POST'])
 @auth_required

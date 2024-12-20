@@ -2,7 +2,7 @@ import os
 from flask import Flask, jsonify
 from dotenv import load_dotenv
 from routes.posts import posts_bp
-from routes.user_information import user_information_bp
+from routes.users import user_information_bp
 from routes.credentials import credentials_bp
 from routes.exercises import exercises_bp
 from routes.gemini import gemini_bp
@@ -112,7 +112,7 @@ def initialize_message_brokers(app):
 
 def create_route_blueprints(app):
     app.register_blueprint(posts_bp, url_prefix='/posts')
-    app.register_blueprint(user_information_bp, url_prefix='/user_information')
+    app.register_blueprint(user_information_bp, url_prefix='/users')
     app.register_blueprint(credentials_bp, url_prefix='/credentials')
     app.register_blueprint(exercises_bp, url_prefix='/exercises')
     app.register_blueprint(gemini_bp, url_prefix='/gemini')
