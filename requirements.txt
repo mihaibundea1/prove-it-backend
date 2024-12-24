@@ -8,3 +8,6 @@ redis
 pillow
 pika
 clerk_sdk_python
+python3-dotenv
+jwt
+requests
